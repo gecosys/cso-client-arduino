@@ -2,9 +2,6 @@
 #include <Arduino.h>
 
 extern "C" {
-    #include "mbedtls/pem.h"
-    #include "mbedtls/pk.h"
-    #include "mbedtls/sha256.h"
     #include "mbedtls/error.h"
     #include "mbedtls/gcm.h"
     #include "mbedtls/aes.h"
