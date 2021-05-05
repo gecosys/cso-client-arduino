@@ -11,7 +11,7 @@
 
 class Connection {
 private:
-    Buffer<byte*, POINTER_ARRAY> nextMessage;
+    Buffer<std::shared_ptr<byte>> nextMessage;
     WiFiClient client;
     Status::Code status;
 
@@ -24,9 +24,9 @@ public:
     virtual ~Connection();
 
     bool connect(char* ssid, char* pswd, char* host, uint16_t port);
-    void loopListen();
+    Error::Code loopListen();
     bool sendMessage(byte* data, uint16_t nBytes);
-    std::unique_ptr<byte> getMessage();
+    std::shared_ptr<byte> getMessage();
 };
 
 #endif //_CONNECTION_H_

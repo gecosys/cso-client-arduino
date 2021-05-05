@@ -15,22 +15,29 @@ bool Connection::connect(char* ssid, char* pswd, char* host, uint16_t port) {
     return connectHost(host, port);
 }
 
-void Connection::loopListen() {
+Error::Code Connection::loopListen() {
     bool readHeader = true;
     uint16_t seek = 0;
     uint16_t readed = 0;
     uint16_t lenBuffer = HEADER_SIZE;
-    byte* buffer = new byte[BUFFER_SIZE];
+
+    byte* buffer = (byte*)std::malloc(BUFFER_SIZE * sizeof(byte));
+    if (!buffer) {
+        return Error::NotEnoughMem;
+    }
 
     while (WiFi.status() == WL_CONNECTED && this->status == Status::Connected) {
         readed = this->client.readBytes(buffer + seek, lenBuffer - seek);
-        if (readed == 0) {
+        if (readed <= 0) {
             continue;
         }
         seek += readed;
+        if (seek < lenBuffer) {
+            continue;
+        }
 
-        // Read "header"
-        if (readHeader && seek == HEADER_SIZE) {
+        // Solve "header"
+        if (readHeader) {
             lenBuffer = (buffer[1]<<8) | buffer[0];
             if (lenBuffer > 0) {
                 readHeader = false;
@@ -39,17 +46,19 @@ void Connection::loopListen() {
             continue;
         }
 
-        // Read "body"
-        if (seek < lenBuffer) {
-            continue;
+        // Solve "body"
+        this->nextMessage.push(std::shared_ptr<byte>(buffer));
+        buffer = (byte*)std::malloc(BUFFER_SIZE * sizeof(byte));
+        if (!buffer) {
+            return Error::NotEnoughMem;
         }
-        this->nextMessage.push<byte>(buffer, lenBuffer);
         lenBuffer = HEADER_SIZE;
         readHeader = true;
         seek = 0;
     }
     this->status = Status::Disconnected;
-    delete[] buffer;
+    std::free(buffer);
+    return Error::Disconnected;
 }
 
 bool Connection::sendMessage(byte* data, uint16_t nBytes) {
@@ -81,9 +90,9 @@ bool Connection::sendMessage(byte* data, uint16_t nBytes) {
     return true;
 }
 
-std::unique_ptr<byte> Connection::getMessage() {
-    std::unique_ptr<byte> ret(nullptr);
-    this->nextMessage.pop(ret);
+std::shared_ptr<byte> Connection::getMessage() {
+    std::shared_ptr<byte> ret(nullptr);
+    this->nextMessage.pop<byte>(ret);
     return ret;
 }
 
