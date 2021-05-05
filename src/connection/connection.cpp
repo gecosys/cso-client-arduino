@@ -16,48 +16,57 @@ bool Connection::connect(char* ssid, char* pswd, char* host, uint16_t port) {
 }
 
 Error::Code Connection::loopListen() {
-    bool readHeader = true;
-    uint16_t seek = 0;
-    uint16_t readed = 0;
-    uint16_t lenBuffer = HEADER_SIZE;
-
     byte* buffer = (byte*)std::malloc(BUFFER_SIZE * sizeof(byte));
     if (!buffer) {
         return Error::NotEnoughMem;
     }
 
+    bool header = true;
+    byte* message = nullptr;
+    uint16_t seek = 0;
+    uint16_t readed = 0;
+    uint16_t length = HEADER_SIZE;
+
     while (WiFi.status() == WL_CONNECTED && this->status == Status::Connected) {
-        readed = this->client.readBytes(buffer + seek, lenBuffer - seek);
+        readed = this->client.readBytes(buffer + seek, length - seek);
         if (readed <= 0) {
             continue;
         }
+
+        // Read enough data
         seek += readed;
-        if (seek < lenBuffer) {
+        if (seek < length) {
             continue;
         }
 
-        // Solve "header"
-        if (readHeader) {
-            lenBuffer = (buffer[1]<<8) | buffer[0];
-            if (lenBuffer > 0) {
-                readHeader = false;
+        // Read "data length"
+        if (header) {
+            length = (buffer[1]<<8) | buffer[0];
+            if (length > 0) {
+                header = false;
             }
             seek = 0;
             continue;
         }
 
-        // Solve "body"
-        this->nextMessage.push(std::shared_ptr<byte>(buffer));
-        buffer = (byte*)std::malloc(BUFFER_SIZE * sizeof(byte));
-        if (!buffer) {
+        // Make "message"
+        message = (byte*)std::malloc(length * sizeof(byte));
+        if (!message) {
+            std::free(buffer);
             return Error::NotEnoughMem;
         }
-        lenBuffer = HEADER_SIZE;
-        readHeader = true;
+
+        // Push message
+        memcpy(message, buffer, length);
+        this->nextMessage.push(std::shared_ptr<byte>(message));
+
+        // Reset
+        length = HEADER_SIZE;
+        header = true;
         seek = 0;
     }
-    this->status = Status::Disconnected;
     std::free(buffer);
+    this->status = Status::Disconnected;
     return Error::Disconnected;
 }
 
