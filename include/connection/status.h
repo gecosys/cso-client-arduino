@@ -13,4 +13,14 @@ public:
     };
 };
 
+class Error {
+public:
+    enum Code : uint8_t {
+        Nil = 0,
+        Disconnected,
+        NotEnoughMem,
+    };
+};
+
+
 #endif // _CONNECTION_STATUS_H_
