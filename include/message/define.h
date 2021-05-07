@@ -3,6 +3,7 @@
 
 #define LENGTH_IV 12
 #define LENGTH_AUTHEN_TAG 16
+#define LENGTH_OUTPUT 128
 #define LENGTH_SIGN 32
 
 #define SUCCESS 0
