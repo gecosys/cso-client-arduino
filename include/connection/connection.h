@@ -1,31 +1,37 @@
 #ifndef _CONNECTION_H_
 #define _CONNECTION_H_
 
-#include <memory>
 #include <WiFi.h>
 #include "status.h"
-#include "utils/utils_buffer.h"
+#include "interface.h"
+#include "utils/utils_queue.h"
 
 #define HEADER_SIZE 2
 #define BUFFER_SIZE 1024
 
-class Connection {
+class Connection : public IConnection {
 private:
-    Buffer<std::shared_ptr<byte>> nextMessage;
+    Queue<std::shared_ptr<byte>> nextMessage;
     WiFiClient client;
     Status::Code status;
 
+public:
+    static std::shared_ptr<IConnection> build(uint16_t queueSize);
+
 private:
-    bool connectWifi(char* ssid, char* pswd);
-    bool connectHost(char* host, uint16_t port);
+    Connection(uint16_t queueSize);
+    Error::Code connectWifi(char* ssid, char* pswd);
+    Error::Code connectHost(char* host, uint16_t port);
 
 public:
-    Connection(uint16_t bufferSize);
+    Connection() = delete;
+    Connection(Connection&& other) = delete;
+    Connection(const Connection& other) = delete;
     virtual ~Connection();
 
-    bool connect(char* ssid, char* pswd, char* host, uint16_t port);
+    Error::Code connect(char* ssid, char* pswd, char* host, uint16_t port);
     Error::Code loopListen();
-    bool sendMessage(byte* data, uint16_t nBytes);
+    Error::Code sendMessage(byte* data, uint16_t nBytes);
     std::shared_ptr<byte> getMessage();
 };
 

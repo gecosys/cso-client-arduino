@@ -1,16 +1,21 @@
 #include "connection/connection.h"
 
-Connection::Connection(uint16_t bufferSize) 
-    : nextMessage(bufferSize),
+std::shared_ptr<IConnection> Connection::build(uint16_t queueSize) {
+    return std::shared_ptr<IConnection>(new Connection(queueSize));
+}
+
+Connection::Connection(uint16_t queueSize) 
+    : nextMessage(queueSize),
       status(Status::Prepare) {}
 
 Connection::~Connection() {
     this->client.stop();
 }
 
-bool Connection::connect(char* ssid, char* pswd, char* host, uint16_t port) {
-    if (!connectWifi(ssid, pswd)) {
-        return false;
+Error::Code Connection::connect(char* ssid, char* pswd, char* host, uint16_t port) {
+    Error::Code err = connectWifi(ssid, pswd);
+    if (err != Error::Nil) {
+        return err;
     }
     return connectHost(host, port);
 }
@@ -28,6 +33,7 @@ Error::Code Connection::loopListen() {
     uint16_t length = HEADER_SIZE;
 
     while (WiFi.status() == WL_CONNECTED && this->status == Status::Connected) {
+        // "readed" always is <= "length - seek"
         readed = this->client.readBytes(buffer + seek, length - seek);
         if (readed <= 0) {
             continue;
@@ -67,12 +73,12 @@ Error::Code Connection::loopListen() {
     }
     std::free(buffer);
     this->status = Status::Disconnected;
-    return Error::Disconnected;
+    return Error::NotConnectServer;
 }
 
-bool Connection::sendMessage(byte* data, uint16_t nBytes) {
+Error::Code Connection::sendMessage(byte* data, uint16_t nBytes) {
     if (this->status != Status::Connected) {
-        return false;
+        return Error::NotConnectServer;
     }
 
     //============
@@ -92,11 +98,11 @@ bool Connection::sendMessage(byte* data, uint16_t nBytes) {
             this->status = Status::Disconnected;
             this->client.stop();
             delete[] buffer;
-            return false;
+            return Error::NotConnectServer;
         }        
     }
     delete[] buffer;
-    return true;
+    return Error::Nil;
 }
 
 std::shared_ptr<byte> Connection::getMessage() {
@@ -108,31 +114,29 @@ std::shared_ptr<byte> Connection::getMessage() {
 //========
 // PRIVATE
 //========
-bool Connection::connectWifi(char* ssid, char* pswd) {
+Error::Code Connection::connectWifi(char* ssid, char* pswd) {
     uint8_t retry = 0;
     WiFi.begin(ssid, pswd);
     while (WiFi.status() != WL_CONNECTED) {
         if (++retry >= 3) {
-            return false;
+            return Error::NotConnectServer;
         }
-        Serial.println("Connecting to Wifi...");
         vTaskDelay(500);
     }
-    Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
-    return true;
+    return Error::Nil;
 }
 
-bool Connection::connectHost(char* host, uint16_t port) {
+Error::Code Connection::connectHost(char* host, uint16_t port) {
     if (this->status == Status::Connected) {
-        return true;
+        return Error::Nil;
     }
     uint8_t retry = 0;
     while (!client.connect(host, port)) {
         if (++retry >= 2) {
-            return false;
+            return Error::NotConnectServer;
         }
         vTaskDelay(100);
     }
     this->status = Status::Connected;
-    return true;
+    return Error::Nil;
 }
