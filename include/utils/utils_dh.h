@@ -4,6 +4,7 @@
 #include <BigNumber.h>
 
 class UtilsDH {
+public:
     static BigNumber generatePrivateKey();
     static BigNumber calcPublicKey(BigNumber gKey, BigNumber nKey, BigNumber privKey);
     static void calcSecretKey(BigNumber nKey, BigNumber clientPrivKey, BigNumber serverPubKey, uint8_t outSecretKey[32]);
