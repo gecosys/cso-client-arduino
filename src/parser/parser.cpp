@@ -161,10 +161,8 @@ std::pair<Error::Code, Array<byte>> Parser::createMessage(uint64_t msgID, uint64
         Result<Array<byte>> rawBytes = Cipher::buildRawBytes(
             msgID, msgTag, msgType, 
             encrypted, first, last, request, 
-            name, 
-            strlen(name), 
-            content, 
-            lenContent
+            name, strlen(name), 
+            content, lenContent
         );
         if (rawBytes.errorCode != SUCCESS) {
             std::pair<Error::Code, Array<byte>>(Error::Build, Array<byte>());
@@ -187,10 +185,8 @@ std::pair<Error::Code, Array<byte>> Parser::createMessage(uint64_t msgID, uint64
         Result<Array<byte>> noCipher = Cipher::buildNoCipherBytes(
             msgID, msgTag, msgType, 
             first, last, request, 
-            name, 
-            strlen(name), 
-            content,
-            lenContent,
+            name, strlen(name), 
+            content, lenContent,
             sign.get()
         );
         if (noCipher.errorCode != SUCCESS) {
@@ -203,8 +199,7 @@ std::pair<Error::Code, Array<byte>> Parser::createMessage(uint64_t msgID, uint64
     Result<Array<byte>> aad = Cipher::buildAad(
         msgID, msgTag, msgType, 
         true, first, last, request, 
-        name, 
-        strlen(name)
+        name, strlen(name)
     );
     if (aad.errorCode != SUCCESS) {
         std::pair<Error::Code, Array<byte>>(Error::Build, Array<byte>());
@@ -243,8 +238,7 @@ std::pair<Error::Code, Array<byte>> Parser::createMessage(uint64_t msgID, uint64
     Result<Array<byte>> cipher = Cipher::buildCipherBytes(
         msgID, msgTag, msgType, 
         first, last, request,
-        name, 
-        strlen(name),
+        name, strlen(name),
         iv.get(),
         data.get(),
         LENGTH_OUTPUT,
