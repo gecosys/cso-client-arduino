@@ -10,6 +10,8 @@ public:
         Full,
         Empty,
         Other,
+        Build,
+        Parse,
         Verify,
         Encrypt,
         Decrypt,
