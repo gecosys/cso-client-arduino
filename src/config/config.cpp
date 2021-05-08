@@ -9,8 +9,8 @@ std::shared_ptr<IConfig> Config::build(
     const char* csoPubKey,
     const char* csoAddress
 ) {
-    return std::shared_ptr<IConfig>(new Config(
-        projectID, 
+    // If allocation fails, new_obj_s will return "nullptr"
+    return std::shared_ptr<IConfig>(Safe::new_obj<Config>(projectID, 
         projectToken, 
         connectionName,
         csoPubKey,
@@ -21,7 +21,7 @@ std::shared_ptr<IConfig> Config::build(
 std::shared_ptr<IConfig> Config::build(const char* filePath) {
     File file = SD_MMC.open(filePath, FILE_READ);
     if (!file) {
-        return std::shared_ptr<IConfig>(new Config());
+        return std::shared_ptr<IConfig>(Safe::new_obj<Config>());
     }
 
     // Read all file
@@ -32,13 +32,14 @@ std::shared_ptr<IConfig> Config::build(const char* filePath) {
     DynamicJsonDocument doc(1024);
     deserializeJson(doc, data);
     JsonObject obj = doc.as<JsonObject>();
-    Config* config = new Config();
-    config->projectID = obj["pid"].as<String>();
-    config->projectToken = obj["ptoken"].as<String>();
-    config->connectionName = obj["cname"].as<String>();
-    config->csoPubKey = obj["csopubkey"].as<String>();
-    config->csoPubKey = obj["csoaddr"].as<String>();
-    return std::shared_ptr<IConfig>(config);
+    // JsonObject[key].as will return reference to value
+    return std::shared_ptr<IConfig>(Safe::new_obj<Config>(
+        obj["pid"].as<String>().c_str(), 
+        obj["ptoken"].as<String>().c_str(),
+        obj["cname"].as<String>().c_str(),
+        obj["csopubkey"].as<String>().c_str(),
+        obj["csoaddr"].as<String>().c_str()
+    ));
 }
 
 Config::Config(

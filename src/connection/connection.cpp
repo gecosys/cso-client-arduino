@@ -1,7 +1,7 @@
 #include "connection/connection.h"
 
 std::shared_ptr<IConnection> Connection::build(uint16_t queueSize) {
-    return std::shared_ptr<IConnection>(new Connection(queueSize));
+    return std::shared_ptr<IConnection>(Safe::new_obj<Connection>(queueSize));
 }
 
 Connection::Connection(uint16_t queueSize) 
@@ -21,8 +21,8 @@ Error::Code Connection::connect(char* ssid, char* pswd, char* host, uint16_t por
 }
 
 Error::Code Connection::loopListen() {
-    byte* buffer = (byte*)std::malloc(BUFFER_SIZE * sizeof(byte));
-    if (!buffer) {
+    byte* buffer = Safe::new_arr<byte>(BUFFER_SIZE);
+    if (buffer == nullptr) {
         return Error::NotEnoughMem;
     }
 
@@ -55,14 +55,15 @@ Error::Code Connection::loopListen() {
             continue;
         }
 
-        // Make "message"
-        message = (byte*)std::malloc(length * sizeof(byte));
-        if (!message) {
-            std::free(buffer);
+        // Build "message"
+        message = Safe::new_arr<byte>(length);
+        if (message == nullptr) {
+            delete[] buffer;
             return Error::NotEnoughMem;
         }
 
         // Push message
+        // Don't delete "message" because std::share_ptr will manage
         memcpy(message, buffer, length);
         this->nextMessage.push(std::shared_ptr<byte>(message));
 
@@ -71,7 +72,7 @@ Error::Code Connection::loopListen() {
         header = true;
         seek = 0;
     }
-    std::free(buffer);
+    delete[] buffer;
     this->status = Status::Disconnected;
     return Error::NotConnectServer;
 }
@@ -85,7 +86,10 @@ Error::Code Connection::sendMessage(byte* data, uint16_t nBytes) {
     // Make buffer
     //============
     nBytes = nBytes + 2; // Add 2 bytes "data length"
-    byte* buffer = new byte[nBytes];
+    byte* buffer = Safe::new_arr<byte>(nBytes);
+    if (buffer == nullptr) {
+        return Error::NotEnoughMem;
+    }
     memcpy(buffer, &nBytes, sizeof(uint16_t));
     memcpy(buffer + 2, data, nBytes - 2);
 

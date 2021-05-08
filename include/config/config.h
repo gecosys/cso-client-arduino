@@ -3,6 +3,7 @@
 
 #include <memory>
 #include "interface.h"
+#include "utils/utils_safe.h"
 
 class Config : public IConfig {
 private:
@@ -24,6 +25,7 @@ public:
     static std::shared_ptr<IConfig> build(const char* filePath);
 
 private:
+    friend class Safe;
     Config() = default;
     Config(
         const char* projectID,

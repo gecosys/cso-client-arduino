@@ -1,8 +1,9 @@
 #ifndef _PROXY_H_
 #define _PROXY_H_
 
-#include "config/config.h"
 #include "interface.h"
+#include "config/config.h"
+#include "utils/utils_safe.h"
 
 class Proxy : public IProxy {
 private:
@@ -16,6 +17,7 @@ public:
     static std::shared_ptr<IProxy> build(std::shared_ptr<IConfig> config);
 
 private:
+    friend class Safe;
     Proxy() = default;
     Proxy(std::shared_ptr<IConfig>& config);
 

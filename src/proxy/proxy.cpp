@@ -11,7 +11,7 @@
 #include "utils/utils_aes.h"
 
 std::shared_ptr<IProxy> Proxy::build(std::shared_ptr<IConfig> config) {
-    return std::shared_ptr<IProxy>(new Proxy(config));
+    return std::shared_ptr<IProxy>(Safe::new_obj<Proxy>(config));
 }
 
 Proxy::Proxy(std::shared_ptr<IConfig>& config) {
@@ -33,8 +33,8 @@ std::pair<Error::Code, ServerKey> Proxy::exchangeKey() {
         lenBuffer = 34 + 
                     this->config->getProjectID().length() + 
                     this->config->getConnectionName().length();
-        buffer.reset((byte*)std::malloc(lenBuffer * sizeof(byte)));
-        if (!buffer.get()) {
+        buffer.reset(Safe::new_arr<byte>(lenBuffer));
+        if (buffer.get() == nullptr) {
             return std::pair<Error::Code, ServerKey>(Error::NotEnoughMem, ServerKey());
         }
         serializeJson(doc, buffer.get(), lenBuffer);
@@ -52,7 +52,7 @@ std::pair<Error::Code, ServerKey> Proxy::exchangeKey() {
         if (resp.first != Error::Nil) {
             return std::pair<Error::Code, ServerKey>(resp.first, ServerKey());
         }
-        std::free(buffer.release());
+        delete[] buffer.release();
 
         DynamicJsonDocument doc(1024);
         deserializeJson(doc, resp.second);
@@ -80,8 +80,8 @@ std::pair<Error::Code, ServerKey> Proxy::exchangeKey() {
 
 std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& serverKey) {
     // Build client secret key
-    std::unique_ptr<byte> secretKey((byte*)std::malloc(32 * sizeof(byte)));
-    if (!secretKey.get()) {
+    std::unique_ptr<byte> secretKey(Safe::new_arr<byte>(32));
+    if (secretKey.get() == nullptr) {
         return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
     }
     // Because "BigNumber.toString()" returned pointer to dynamic memory,
@@ -92,31 +92,31 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
 
     // Decode client token
     size_t lenToken;
+    uint16_t length;
     std::unique_ptr<byte> decodedToken(nullptr);
     {
-        uint16_t lenBuffer = this->config->getProjectToken().length();
-        byte* buffer = (byte*)std::malloc(lenBuffer * sizeof(byte));
-        if (!buffer) {
+        length = this->config->getProjectToken().length();
+        byte* buffer = Safe::new_arr<byte>(length);
+        if (buffer == nullptr) {
             return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
         }
-        this->config->getProjectToken().getBytes(buffer, lenBuffer);
-        decodedToken.reset(base64_decode(buffer, lenBuffer, &lenToken));
-        std::free(buffer);
-        if (decodedToken == nullptr) {
+        this->config->getProjectToken().getBytes(buffer, length);
+        decodedToken.reset(base64_decode(buffer, length, &lenToken));
+        delete[] buffer;
+        if (decodedToken == nullptr || lenToken <= 0) {
             return std::pair<Error::Code, ServerTicket>(Error::Encrypt, ServerTicket());
         }
     }
 
     // Build client aad
-    uint16_t length;
     std::unique_ptr<byte> aad(nullptr);
     {
         uint16_t lenPubKey = strlen(clientPubKey.get());
         uint16_t lenPID = this->config->getProjectID().length();
         uint16_t lenCName = this->config->getConnectionName().length();
         length = lenPID + lenCName + lenPubKey;
-        aad.reset((byte*)std::malloc(length * sizeof(byte)));
-        if (!aad.get()) {
+        aad.reset(Safe::new_arr<byte>(length));
+        if (aad.get() == nullptr) {
             return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
         }
         this->config->getProjectID().getBytes(aad.get(), lenPID);
@@ -125,30 +125,30 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
     }
 
     // Buil encrypt client token
-    std::unique_ptr<byte> iv((byte*)std::malloc(LENGTH_IV * sizeof(byte)));
-    if (!iv.get()) {
+    std::unique_ptr<byte> iv(Safe::new_arr<byte>(LENGTH_IV));
+    if (iv.get() == nullptr) {
         return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
     }
 
-    std::unique_ptr<byte> authenTag((byte*)std::malloc(LENGTH_AUTHEN_TAG * sizeof(byte)));
-    if (!authenTag.get()) {
+    std::unique_ptr<byte> authenTag(Safe::new_arr<byte>(LENGTH_AUTHEN_TAG));
+    if (authenTag.get() == nullptr) {
         return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
     }
 
-    std::unique_ptr<byte> token((byte*)std::malloc(LENGTH_OUTPUT * sizeof(byte)));
-    if (!token.get()) {
+    std::unique_ptr<byte> token(Safe::new_arr<byte>(LENGTH_OUTPUT));
+    if (token.get() == nullptr) {
         return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
     }
     if (UtilsAES::encrypt(
-            secretKey.get(), 
-            decodedToken.get(), 
-            lenToken, 
-            aad.get(), 
-            length, 
-            iv.get(), 
-            authenTag.get(),
-            token.get()
-        ) != SUCCESS) {
+        secretKey.get(), 
+        decodedToken.get(), 
+        lenToken, 
+        aad.get(), 
+        length, 
+        iv.get(), 
+        authenTag.get(),
+        token.get()
+    ) != SUCCESS) {
         return std::pair<Error::Code, ServerTicket>(Error::Encrypt, ServerTicket());
     }
 
@@ -174,8 +174,8 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
                  strlen(clientPubKey.get()) +
                  this->config->getProjectID().length() + 
                  this->config->getConnectionName().length();
-        buffer.reset((byte*)std::malloc(length * sizeof(byte)));
-        if (!buffer.get()) {
+        buffer.reset(Safe::new_arr<byte>(length));
+        if (buffer.get() == nullptr) {
             return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
         }
         serializeJson(doc, buffer.get(), length);
@@ -194,7 +194,7 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
         if (resp.first != Error::Nil) {
             return std::pair<Error::Code, ServerTicket>(resp.first, ServerTicket());
         }
-        std::free(buffer.release());
+        delete[] buffer.release();
 
         DynamicJsonDocument doc(1024);
         deserializeJson(doc, resp.second);
@@ -227,8 +227,8 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
 
     // Build server aad
     length = 2 + hubAddress.length();
-    aad.reset((byte*)std::malloc((length + serverPubKey.length()) * sizeof(byte)));
-    if (!aad.get()) {
+    aad.reset(Safe::new_arr<byte>(length + serverPubKey.length()));
+    if (aad.get() == nullptr) {
         return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
     }
     memcpy(aad.get(), &ticketID, 2);
@@ -253,7 +253,7 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
     // Parse server ticket token to bytes
     Result<byte*> res = Ticket::buildBytes(ticketID, token.get());
     if (res.errorCode != SUCCESS) {
-        return std::pair<Error::Code, ServerTicket>(Error::Other, ServerTicket());
+        return std::pair<Error::Code, ServerTicket>(Error::Build, ServerTicket());
     }
 
     // Done
@@ -292,14 +292,14 @@ std::pair<Error::Code, String> Proxy::sendPOST(const char* url, byte* buffer, ui
 }
 
 Error::Code Proxy::verifyDHKeys(const String& gKey, const String& nKey, const String& pubKey, const String& sign) {
-    std::unique_ptr<byte> signBytes((byte*)std::malloc(32 * sizeof(byte)));
-    if (!signBytes.get()) {
+    std::unique_ptr<byte> signBytes(Safe::new_arr<byte>(32));
+    if (signBytes.get() == nullptr) {
         return Error::NotEnoughMem;
     }
 
     uint16_t length = this->config->getCSOPublicKey().length();
-    std::unique_ptr<byte> pubKeyBytes((byte*)std::malloc(length * sizeof(byte)));
-    if (!pubKeyBytes.get()) {
+    std::unique_ptr<byte> pubKeyBytes(Safe::new_arr<byte>(length));
+    if (pubKeyBytes.get() == nullptr) {
         return Error::NotEnoughMem;
     }
 
@@ -307,8 +307,8 @@ Error::Code Proxy::verifyDHKeys(const String& gKey, const String& nKey, const St
     uint16_t lenGKey = gKey.length();
     uint16_t lenNKey = nKey.length();
     uint16_t lenPubKey = pubKey.length();
-    std::unique_ptr<byte> data((byte*)std::malloc((lenGKey + lenNKey + lenPubKey) * sizeof(byte)));
-    if (!data.get()) {
+    std::unique_ptr<byte> data(Safe::new_arr<byte>(lenGKey + lenNKey + lenPubKey));
+    if (data.get() == nullptr) {
         return Error::NotEnoughMem;
     }
     gKey.getBytes(data.get(), lenGKey);
@@ -323,11 +323,11 @@ Error::Code Proxy::verifyDHKeys(const String& gKey, const String& nKey, const St
     
     // Verify
     if (UtilsRSA::verifySignature(
-            pubKeyBytes.get(), 
-            signBytes.get(), 
-            data.get(), 
-            lenGKey + lenNKey + lenPubKey
-        ) != SUCCESS) {
+        pubKeyBytes.get(), 
+        signBytes.get(), 
+        data.get(), 
+        lenGKey + lenNKey + lenPubKey
+    ) != SUCCESS) {
         return Error::Verify;
     }
     return Error::Nil;

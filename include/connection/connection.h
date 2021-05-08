@@ -4,6 +4,7 @@
 #include <WiFi.h>
 #include "status.h"
 #include "interface.h"
+#include "utils/utils_safe.h"
 #include "utils/utils_queue.h"
 
 #define HEADER_SIZE 2
@@ -19,6 +20,7 @@ public:
     static std::shared_ptr<IConnection> build(uint16_t queueSize);
 
 private:
+    friend class Safe;
     Connection(uint16_t queueSize);
     Error::Code connectWifi(char* ssid, char* pswd);
     Error::Code connectHost(char* host, uint16_t port);
