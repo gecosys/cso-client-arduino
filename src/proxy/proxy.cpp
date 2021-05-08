@@ -211,10 +211,10 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
         hubAddress = obj["hub_address"].as<String>();
 
         String str(obj["iv"].as<String>());
-        str.getBytes(iv.get(), LENGTH_IV, 0);
+        str.getBytes(iv.get(), LENGTH_IV);
 
         str = obj["auth_tag"].as<String>();
-        str.getBytes(authenTag.get(), LENGTH_AUTHEN_TAG, 0);
+        str.getBytes(authenTag.get(), LENGTH_AUTHEN_TAG);
 
         str = obj["ticket_token"].as<String>();
         lenToken = str.length();
@@ -239,7 +239,7 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
     UtilsDH::calcSecretKey(serverKey.nKey, clientPrivKey, BigNumber(serverPubKey.c_str()), secretKey.get());
 
     // Decrypt server ticket token
-    UtilsAES::decrypt(
+    if (UtilsAES::decrypt(
         secretKey.get(), 
         serverTicketToken.get(), 
         lenToken, 
@@ -248,7 +248,9 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
         iv.get(), 
         authenTag.get(),
         token.get()
-    );
+    ) != SUCCESS) {
+        return std::pair<Error::Code, ServerTicket>(Error::Decrypt, ServerTicket());
+    }
 
     // Parse server ticket token to bytes
     Result<byte*> res = Ticket::buildBytes(ticketID, token.get());
@@ -292,7 +294,7 @@ std::pair<Error::Code, String> Proxy::sendPOST(const char* url, byte* buffer, ui
 }
 
 Error::Code Proxy::verifyDHKeys(const String& gKey, const String& nKey, const String& pubKey, const String& sign) {
-    std::unique_ptr<byte> signBytes(Safe::new_arr<byte>(32));
+    std::unique_ptr<byte> signBytes(Safe::new_arr<byte>(LENGTH_SIGN));
     if (signBytes.get() == nullptr) {
         return Error::NotEnoughMem;
     }
@@ -319,7 +321,7 @@ Error::Code Proxy::verifyDHKeys(const String& gKey, const String& nKey, const St
     this->config->getCSOPublicKey().getBytes(pubKeyBytes.get(), length);
 
     // Convert sign to bytes
-    sign.getBytes(signBytes.get(), 32);
+    sign.getBytes(signBytes.get(), LENGTH_SIGN);
     
     // Verify
     if (UtilsRSA::verifySignature(
