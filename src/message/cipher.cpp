@@ -132,7 +132,7 @@ uint16_t Cipher::getSizeData() {
     return this->sizeData;
 }
 
-Result<uint8_t *> Cipher::intoBytes() {
+Result<Array<uint8_t>> Cipher::intoBytes() {
     if (this->isEncrypted) {
         return Cipher::buildCipherBytes(
             this->msgID,
@@ -164,7 +164,7 @@ Result<uint8_t *> Cipher::intoBytes() {
         );
 }
 
-Result<uint8_t *> Cipher::getRawBytes() {
+Result<Array<uint8_t>> Cipher::getRawBytes() {
     return Cipher::buildRawBytes(
         this->msgID,
         this->msgTag,
@@ -180,7 +180,7 @@ Result<uint8_t *> Cipher::getRawBytes() {
     );
 }
 
-Result<uint8_t *> Cipher::getAad() {
+Result<Array<uint8_t>> Cipher::getAad() {
     return Cipher::buildAad(
         this->msgID,
         this->msgTag,
@@ -204,8 +204,8 @@ Result<uint8_t *> Cipher::getAad() {
 // Sign: if encrypted is false then 32 bytes (HMAC-SHA256), otherwise 0 byte
 // Name: nName bytes
 // Data: remaining bytes
-Result<Cipher *> Cipher::parseBytes(uint8_t *buffer, uint16_t sizeBuffer) {
-    Result<Cipher *> result;
+Result<std::shared_ptr<Cipher>> Cipher::parseBytes(uint8_t *buffer, uint16_t sizeBuffer) {
+    Result<std::shared_ptr<Cipher>> result;
     uint8_t fixedLen = 10;
     uint8_t posAuthenTag = 10;
     if (sizeBuffer < fixedLen) {
@@ -289,13 +289,13 @@ Result<Cipher *> Cipher::parseBytes(uint8_t *buffer, uint16_t sizeBuffer) {
     cipher->lenName = lenName;
     cipher->name = name;
 
-    result.data = cipher;
+    result.data.reset(cipher);
     result.errorCode = SUCCESS;
     return result;
 }
 
-Result<uint8_t *> Cipher::buildRawBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, char *name, uint8_t lenName, uint8_t *data, uint16_t sizeData) {
-    Result<uint8_t *> result;
+Result<Array<uint8_t>> Cipher::buildRawBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t *data, uint16_t sizeData) {
+    Result<Array<uint8_t>> result;
     if (lenName == 0 || lenName > MAX_CONNECTION_NAME_LENGTH) {
 		result.errorCode = ERROR_CODE_INVALID_CONNECTION_NAME;
         return result;
@@ -339,12 +339,13 @@ Result<uint8_t *> Cipher::buildRawBytes(uint64_t msgID, uint64_t msgTag, Message
 	}
 
     result.errorCode = SUCCESS;
-    result.data = buffer;
+    result.data.ptr.reset(buffer);
+    result.data.length = fixedLen+lenName+sizeData;
     return result;
 }
 
-Result<uint8_t *> Cipher::buildAad(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, char *name, uint8_t lenName) {
-    Result<uint8_t *> result;
+Result<Array<uint8_t>> Cipher::buildAad(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName) {
+    Result<Array<uint8_t>> result;
     if (lenName == 0 || lenName > MAX_CONNECTION_NAME_LENGTH) {
         result.errorCode = ERROR_CODE_INVALID_CONNECTION_NAME;
         return result;
@@ -385,20 +386,21 @@ Result<uint8_t *> Cipher::buildAad(uint64_t msgID, uint64_t msgTag, MessageType 
 	memcpy(buffer+fixedLen, name, lenName);
 
     result.errorCode = SUCCESS;
-    result.data = buffer;
+    result.data.ptr.reset(buffer);
+    result.data.length = fixedLen+lenName;
     return result;
 }
 
-Result<uint8_t *> Cipher::buildCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, char *name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t *data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG]) {
+Result<Array<uint8_t>> Cipher::buildCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t *data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG]) {
     return Cipher::buildBytes(msgID, msgTag, msgType, true, isFirst, isLast, isRequest, name, lenName, iv, data, sizeData, authenTag, nullptr);
 }
 
-Result<uint8_t *> Cipher::buildNoCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, char *name, uint8_t lenName, uint8_t *data, uint16_t sizeData, uint8_t sign[LENGTH_SIGN]) {
+Result<Array<uint8_t>> Cipher::buildNoCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t *data, uint16_t sizeData, uint8_t sign[LENGTH_SIGN]) {
     return Cipher::buildBytes(msgID, msgTag, msgType, false, isFirst, isLast, isRequest, name, lenName, nullptr, data, sizeData, nullptr, sign);
 }
 
-Result<uint8_t *> Cipher::buildBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, char *name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t *data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG], uint8_t sign[LENGTH_SIGN]) {
-    Result<uint8_t *> result;
+Result<Array<uint8_t>> Cipher::buildBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t *data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG], uint8_t sign[LENGTH_SIGN]) {
+    Result<Array<uint8_t>> result;
     if (lenName == 0 || lenName > MAX_CONNECTION_NAME_LENGTH) {
         result.errorCode = ERROR_CODE_INVALID_CONNECTION_NAME;
         return result;
@@ -463,6 +465,7 @@ Result<uint8_t *> Cipher::buildBytes(uint64_t msgID, uint64_t msgTag, MessageTyp
 	}
 
     result.errorCode = SUCCESS;
-    result.data = buffer;
+    result.data.ptr.reset(buffer);
+    result.data.length = lenBuffer;
     return result;
 }
