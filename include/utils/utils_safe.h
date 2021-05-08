@@ -5,14 +5,14 @@
 
 /*
 *
-* ESP32 module doesn't support new (std::nothrow) to check successfull allocation memory
+* ESP32 module doesn't support "new (std::nothrow)"" to check successfull allocation memory
 * Therefor, we have to try-cacth when call operator "new"
 * See more at link:
     "https://arduino-esp8266.readthedocs.io/en/latest/reference.html" (Progmem section)
-* This file defined "new_s" functions to allocate memory with operator "new" safely
+* "Safe" class will include safety functions include allocate memory with operator "new"
 * You can use "std::malloc" to allocate for basic types but not be able for custom types
 * because it doesn's call constructor
-* "new_s" is more general
+* "new_arr" and "new_obj" are more general
 *
 */
 
