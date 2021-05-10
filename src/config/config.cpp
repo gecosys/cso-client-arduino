@@ -10,7 +10,8 @@ std::shared_ptr<IConfig> Config::build(
     const char* csoAddress
 ) {
     // If allocation fails, new_obj_s will return "nullptr"
-    return std::shared_ptr<IConfig>(Safe::new_obj<Config>(projectID, 
+    return std::shared_ptr<IConfig>(Safe::new_obj<Config>(
+        projectID, 
         projectToken, 
         connectionName,
         csoPubKey,
@@ -32,7 +33,7 @@ std::shared_ptr<IConfig> Config::build(const char* filePath) {
     DynamicJsonDocument doc(1024);
     deserializeJson(doc, data);
     JsonObject obj = doc.as<JsonObject>();
-    // JsonObject[key].as will return reference to value
+    // "JsonObject["key"].as" will return reference to value
     return std::shared_ptr<IConfig>(Safe::new_obj<Config>(
         obj["pid"].as<String>().c_str(), 
         obj["ptoken"].as<String>().c_str(),
