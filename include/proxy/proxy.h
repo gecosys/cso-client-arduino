@@ -27,7 +27,7 @@ private:
 public:
     Proxy(Proxy&& other) = delete;
     Proxy(const Proxy& other) = delete;
-    virtual ~Proxy();
+    virtual ~Proxy() noexcept;
 
     std::pair<Error::Code, ServerKey> exchangeKey();
     std::pair<Error::Code, ServerTicket> registerConnection(const ServerKey& serverKey);
