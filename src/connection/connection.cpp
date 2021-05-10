@@ -110,9 +110,7 @@ Error::Code Connection::sendMessage(byte* data, uint16_t nBytes) {
 }
 
 std::shared_ptr<byte> Connection::getMessage() {
-    std::shared_ptr<byte> ret(nullptr);
-    this->nextMessage.pop<byte>(ret);
-    return ret;
+    return this->nextMessage.pop<byte>().second;
 }
 
 //========
