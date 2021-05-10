@@ -1,5 +1,5 @@
-#ifndef _QUEUE_ITEM_H_
-#define _QUEUE_ITEM_H_
+#ifndef _CSO_QUEUE_ITEM_H_
+#define _CSO_QUEUE_ITEM_H_
 
 #include <memory>
 #include <string>
@@ -21,4 +21,4 @@ struct ItemQueue {
     uint64_t timestamp;
 };
 
-#endif //_QUEUE_ITEM_H_
+#endif //_CSO_QUEUE_ITEM_H_

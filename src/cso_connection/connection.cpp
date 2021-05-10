@@ -1,4 +1,4 @@
-#include "connection/connection.h"
+#include "cso_connection/connection.h"
 
 std::shared_ptr<IConnection> Connection::build(uint16_t queueSize) {
     return std::shared_ptr<IConnection>(Safe::new_obj<Connection>(queueSize));

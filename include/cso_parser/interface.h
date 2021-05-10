@@ -1,5 +1,5 @@
-#ifndef _PARSER_INTERFACE_H_
-#define _PARSER_INTERFACE_H_
+#ifndef _CSO_PARSER_INTERFACE_H_
+#define _CSO_PARSER_INTERFACE_H_
 
 #include <memory>
 #include <utility>
@@ -45,4 +45,4 @@ public:
     ) = 0;
 };
 
-#endif //_PARSER_INTERFACE_H_
+#endif //_CSO_PARSER_INTERFACE_H_

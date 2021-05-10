@@ -1,5 +1,5 @@
-#ifndef _CONNECTION_INTERFACE_H_
-#define _CONNECTION_INTERFACE_H_
+#ifndef _CSO_CONNECTION_INTERFACE_H_
+#define _CSO_CONNECTION_INTERFACE_H_
 
 #include <memory>
 #include <Arduino.h>
@@ -13,4 +13,4 @@ public:
     virtual std::shared_ptr<byte> getMessage() = 0;
 };
 
-#endif // _CONNECTION_INTERFACE_H_
+#endif // _CSO_CONNECTION_INTERFACE_H_

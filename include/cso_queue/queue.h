@@ -1,5 +1,5 @@
-#ifndef _QUEUE_H_
-#define _QUEUE_H_
+#ifndef _CSO_QUEUE_H_
+#define _CSO_QUEUE_H_
 
 #include <atomic>
 #include "interface.h"
@@ -33,4 +33,4 @@ public:
     void clearMessage(uint64_t msgID) noexcept;
 };
 
-#endif //_QUEUE_H_
+#endif //_CSO_QUEUE_H_

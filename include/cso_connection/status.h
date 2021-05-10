@@ -1,5 +1,5 @@
-#ifndef _CONNECTION_STATUS_H_
-#define _CONNECTION_STATUS_H_
+#ifndef _CSO_CONNECTION_STATUS_H_
+#define _CSO_CONNECTION_STATUS_H_
 
 #include <cstdint>
 
@@ -13,4 +13,4 @@ public:
     };
 };
 
-#endif // _CONNECTION_STATUS_H_
+#endif // _CSO_CONNECTION_STATUS_H_

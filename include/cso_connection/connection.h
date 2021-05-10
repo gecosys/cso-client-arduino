@@ -1,5 +1,5 @@
-#ifndef _CONNECTION_H_
-#define _CONNECTION_H_
+#ifndef _CSO_CONNECTION_H_
+#define _CSO_CONNECTION_H_
 
 #include <WiFi.h>
 #include "status.h"
@@ -37,4 +37,4 @@ public:
     std::shared_ptr<byte> getMessage();
 };
 
-#endif //_CONNECTION_H_
+#endif //_CSO_CONNECTION_H_

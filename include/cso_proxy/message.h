@@ -1,5 +1,5 @@
-#ifndef _PROXY_MESSAGE_H_
-#define _PROXY_MESSAGE_H_
+#ifndef _CSO_PROXY_MESSAGE_H_
+#define _CSO_PROXY_MESSAGE_H_
 
 #include <memory>
 #include <string>
@@ -35,4 +35,4 @@ struct ServerTicket {
         ticketID(ticketID) {}
 };
 
-#endif // _PROXY_MESSAGE_H_
+#endif // _CSO_PROXY_MESSAGE_H_

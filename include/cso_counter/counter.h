@@ -1,5 +1,5 @@
-#ifndef _COUNTER_H_
-#define _COUNTER_H_
+#ifndef _CSO_COUNTER_H_
+#define _CSO_COUNTER_H_
 
 #include <atomic>
 #include <memory>
@@ -34,4 +34,4 @@ public:
     bool markReadDone(uint64_t index) noexcept;
 };
 
-#endif //_COUNTER_H_
+#endif //_CSO_COUNTER_H_

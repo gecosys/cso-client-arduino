@@ -1,5 +1,5 @@
-#ifndef _PROXY_H_
-#define _PROXY_H_
+#ifndef _CSO_PROXY_H_
+#define _CSO_PROXY_H_
 
 #include "interface.h"
 #include "config/config.h"
@@ -33,4 +33,4 @@ public:
     std::pair<Error::Code, ServerTicket> registerConnection(const ServerKey& serverKey);
 };
 
-#endif //_PROXY_H_
+#endif //_CSO_PROXY_H_

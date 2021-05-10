@@ -1,5 +1,5 @@
-#ifndef _PARSER_H_
-#define _PARSER_H_
+#ifndef _CSO_PARSER_H_
+#define _CSO_PARSER_H_
 
 #include "interface.h"
 #include "utils/utils_safe.h"
@@ -71,4 +71,4 @@ public:
     );
 };
 
-#endif //_PARSER_H_
+#endif //_CSO_PARSER_H_

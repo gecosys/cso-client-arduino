@@ -1,5 +1,5 @@
-#ifndef _QUEUE_INTERFACE_H_
-#define _QUEUE_INTERFACE_H_
+#ifndef _CSO_QUEUE_INTERFACE_H_
+#define _CSO_QUEUE_INTERFACE_H_
 
 #include "item.h"
 
@@ -13,4 +13,4 @@ public:
     virtual void clearMessage(uint64_t msgID) noexcept = 0;
 };
 
-#endif //_QUEUE_INTERFACE_H_
+#endif //_CSO_QUEUE_INTERFACE_H_

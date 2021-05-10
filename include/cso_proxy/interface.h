@@ -1,5 +1,5 @@
-#ifndef _PROXY_INTERFACE_H_
-#define _PROXY_INTERFACE_H_
+#ifndef _CSO_PROXY_INTERFACE_H_
+#define _CSO_PROXY_INTERFACE_H_
 
 #include <memory>
 #include <utility>

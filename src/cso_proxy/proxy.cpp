@@ -3,7 +3,7 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <crypto/base64.h>
-#include "proxy/proxy.h"
+#include "cso_proxy/proxy.h"
 #include "config/config.h"
 #include "message/ticket.h"
 #include "utils/utils_dh.h"
