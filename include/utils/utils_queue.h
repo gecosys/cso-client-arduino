@@ -22,39 +22,33 @@ private:
     // Not necessarily using smart pointer, using raw pointer is simpler
     storage* buffer;
     SpinLock spin;
+    // Using "atomic" for "size" will be faster than putting "size" into "spin_lock" block
     std::atomic<uint32_t> size;
     uint32_t capacity;
     uint32_t index_read;
     uint32_t index_write;
 
 private:
-    Error::Code sync_read(uint32_t& index) noexcept {
-        // Using "atomic" for "size" will be faster than putting "size" into "spin_lock" block
-        // "fetch_add" or "fetch_sub" uses "std::memory_order_seq_cst"
-        if (this->size.fetch_sub(1) <= 0) {
-            this->size.fetch_add(1);
-            return Error::Empty;
-        }
+    #define SYNC_READ(index, ret)                                   \
+    if (this->size.fetch_sub(1) <= 0) {                             \
+        this->size.fetch_add(1);                                    \
+        ret.first = Error::Empty;                                   \
+        return ret;                                                 \
+    }                                                               \
+    this->spin.lock();                                              \
+    index = this->index_read;                                       \
+    this->index_read = (this->index_read + 1) % this->capacity;     \
+    this->spin.unlock();
 
-        this->spin.lock();
-        index = this->index_read;
-        this->index_read = (this->index_read + 1) % this->capacity;
-        this->spin.unlock();
-        return Error::Nil;
-    }
-
-    Error::Code sync_write(uint32_t& index) noexcept {
-        if (this->size.fetch_add(1) >= this->capacity) {
-            this->size.fetch_sub(1);
-            return Error::Full;
-        }
-
-        this->spin.lock();
-        index = this->index_write;
-        this->index_write = (this->index_write + 1) % this->capacity;
-        this->spin.unlock();
-        return Error::Nil;
-    }
+    #define SYNC_WRITE(index)                                       \
+    if (this->size.fetch_add(1) >= this->capacity) {                \
+        this->size.fetch_sub(1);                                    \
+        return Error::Full;                                         \
+    }                                                               \
+    this->spin.lock();                                              \
+    index = this->index_write;                                      \
+    this->index_write = (this->index_write + 1) % this->capacity;   \
+    this->spin.unlock();
 
 public:
     Queue(uint32_t capacity) 
@@ -63,7 +57,7 @@ public:
           capacity(capacity), 
           index_read(0), 
           index_write(0) {
-        assert(this->capacity != 0);
+        assert(this->capacity > 0);
         this->buffer = Safe::new_arr<storage>(this->capacity);
         if (this->buffer == nullptr) {
             throw "[utils_queue/Queue(uin32_t capacity)]Not enough mem";
@@ -75,6 +69,7 @@ public:
     }
 
     void clear() {
+        // "fetch_add" or "fetch_sub" uses "std::memory_order_seq_cst"
         this->size.store(0, std::memory_order_seq_cst);
         LOCK(&this->spinLock);
         this->index_read = 0;
@@ -88,10 +83,7 @@ public:
 
     Error::Code push(ValueType& value) {
         uint32_t index;
-        Error::Code err = sync_write(index);
-        if (err != Error::Nil) {
-            return err;
-        }
+        SYNC_WRITE(index)
         // "std::addressof" prevents user wrong implementation "operator &"
         // User can return address of some fields of object, not object's address
         new (static_cast<void*>(std::addressof(this->buffer[index])))ValueType(value);
@@ -105,10 +97,7 @@ public:
     std::pair<Error::Code, ValueType> pop() {
         uint32_t index;
         std::pair<Error::Code, ValueType> ret;
-        ret.first = sync_read(index);
-        if (ret.first != Error::Nil) {
-            return ret;
-        }
+        SYNC_READ(index, ret)
         ValueType tmp = reinterpret_cast<ValueType&>(this->buffer[index]);
         ret.second = tmp;
         tmp.~ValueType();
@@ -125,10 +114,7 @@ public:
     std::pair<Error::Code, ValueType> pop() {
         uint32_t index;
         std::pair<Error::Code, ValueType> ret;
-        ret.first = sync_read(index);
-        if (ret.first != Error::Nil) {
-            return ret;
-        }
+        SYNC_READ(index, ret)
         ret.second.swap(reinterpret_cast<ValueType&>(this->buffer[index]));
         return ret;
     }
