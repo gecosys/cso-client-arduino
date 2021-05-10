@@ -29,7 +29,7 @@ public:
     Connection() = delete;
     Connection(Connection&& other) = delete;
     Connection(const Connection& other) = delete;
-    virtual ~Connection();
+    virtual ~Connection() noexcept;
 
     Error::Code connect(char* ssid, char* pswd, char* host, uint16_t port);
     Error::Code loopListen();
