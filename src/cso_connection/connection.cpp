@@ -1,7 +1,11 @@
 #include "cso_connection/connection.h"
 
 std::shared_ptr<IConnection> Connection::build(uint16_t queueSize) {
-    return std::shared_ptr<IConnection>(Safe::new_obj<Connection>(queueSize));
+    IConnection* obj = Safe::new_obj<Connection>(queueSize);
+    if (obj == nullptr) {
+        throw "[cso_connection/Connection::build()]Not enough memory to create object";
+    }
+    return std::shared_ptr<IConnection>(obj);
 }
 
 Connection::Connection(uint16_t queueSize) 
@@ -12,7 +16,7 @@ Connection::~Connection() {
     this->client.stop();
 }
 
-Error::Code Connection::connect(char* ssid, char* pswd, char* host, uint16_t port) {
+Error::Code Connection::connect(const char* ssid, const char* pswd, const char* host, uint16_t port) {
     Error::Code err = connectWifi(ssid, pswd);
     if (err != Error::Nil) {
         return err;
@@ -65,7 +69,7 @@ Error::Code Connection::loopListen() {
         // Push message
         // Don't delete "message" because std::share_ptr will manage
         memcpy(message, buffer, length);
-        this->nextMessage.push(std::shared_ptr<byte>(message));
+        this->nextMessage.push(Array<byte>(message, length));
 
         // Reset
         length = HEADER_SIZE;
@@ -109,14 +113,14 @@ Error::Code Connection::sendMessage(byte* data, uint16_t nBytes) {
     return Error::Nil;
 }
 
-std::shared_ptr<byte> Connection::getMessage() {
+Array<byte> Connection::getMessage() {
     return this->nextMessage.pop<byte>().second;
 }
 
 //========
 // PRIVATE
 //========
-Error::Code Connection::connectWifi(char* ssid, char* pswd) {
+Error::Code Connection::connectWifi(const char* ssid, const char* pswd) {
     uint8_t retry = 0;
     WiFi.begin(ssid, pswd);
     while (WiFi.status() != WL_CONNECTED) {
@@ -128,7 +132,7 @@ Error::Code Connection::connectWifi(char* ssid, char* pswd) {
     return Error::Nil;
 }
 
-Error::Code Connection::connectHost(char* host, uint16_t port) {
+Error::Code Connection::connectHost(const char* host, uint16_t port) {
     if (this->status == Status::Connected) {
         return Error::Nil;
     }

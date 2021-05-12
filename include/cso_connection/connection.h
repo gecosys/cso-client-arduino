@@ -5,14 +5,14 @@
 #include "status.h"
 #include "interface.h"
 #include "utils/utils_safe.h"
-#include "utils/utils_queue.h"
+#include "utils/utils_concurrency_queue.h"
 
 #define HEADER_SIZE 2
 #define BUFFER_SIZE 1024
 
 class Connection : public IConnection {
 private:
-    Queue<std::shared_ptr<byte>> nextMessage;
+    ConcurrencyQueue<Array<byte>> nextMessage;
     WiFiClient client;
     Status::Code status;
 
@@ -22,8 +22,8 @@ public:
 private:
     friend class Safe;
     Connection(uint16_t queueSize);
-    Error::Code connectWifi(char* ssid, char* pswd);
-    Error::Code connectHost(char* host, uint16_t port);
+    Error::Code connectWifi(const char* ssid, const char* pswd);
+    Error::Code connectHost(const char* host, uint16_t port);
 
 public:
     Connection() = delete;
@@ -31,10 +31,10 @@ public:
     Connection(const Connection& other) = delete;
     virtual ~Connection() noexcept;
 
-    Error::Code connect(char* ssid, char* pswd, char* host, uint16_t port);
+    Error::Code connect(const char* ssid, const char* pswd, const char* host, uint16_t port);
     Error::Code loopListen();
     Error::Code sendMessage(byte* data, uint16_t nBytes);
-    std::shared_ptr<byte> getMessage();
+    Array<byte> getMessage();
 };
 
 #endif //_CSO_CONNECTION_H_
