@@ -16,6 +16,7 @@ public:
         Encrypt,
         Decrypt,
         HttpError,
+        NotReady,
         NotEnoughMem,
         NotConnectServer,
     };
