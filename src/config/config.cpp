@@ -3,20 +3,28 @@
 #include "config/config.h"
 
 std::shared_ptr<IConfig> Config::build(
-    const char* projectID,
-    const char* projectToken,
-    const char* connectionName,
-    const char* csoPubKey,
-    const char* csoAddress
+    const char* projectID, 
+    const char* projectToken, 
+    const char* connectionName, 
+    const char* csoPubKey, 
+    const char* csoAddress, 
+    const char* ssid, 
+    const char* password
 ) {
     // If allocation fails, new_obj_s will return "nullptr"
-    return std::shared_ptr<IConfig>(Safe::new_obj<Config>(
+    IConfig* obj = Safe::new_obj<Config>(
         projectID, 
         projectToken, 
-        connectionName,
-        csoPubKey,
-        csoAddress
-    ));
+        connectionName, 
+        csoPubKey, 
+        csoAddress,
+        ssid,
+        password
+    );
+    if (obj == nullptr) {
+        throw "[cso_config/Config::build]Not enough memory to create object";
+    }
+    return std::shared_ptr<IConfig>(obj);
 }
 
 std::shared_ptr<IConfig> Config::build(const char* filePath) {
@@ -32,29 +40,38 @@ std::shared_ptr<IConfig> Config::build(const char* filePath) {
     // Parse data
     DynamicJsonDocument doc(1024);
     deserializeJson(doc, data);
-    JsonObject obj = doc.as<JsonObject>();
+    JsonObject obj_json = doc.as<JsonObject>();
     // "JsonObject["key"].as" will return reference to value
-    return std::shared_ptr<IConfig>(Safe::new_obj<Config>(
-        obj["pid"].as<String>().c_str(), 
-        obj["ptoken"].as<String>().c_str(),
-        obj["cname"].as<String>().c_str(),
-        obj["csopubkey"].as<String>().c_str(),
-        obj["csoaddr"].as<String>().c_str()
-    ));
+    IConfig* obj = Safe::new_obj<Config>(
+        obj_json["pid"].as<String>().c_str(), 
+        obj_json["ptoken"].as<String>().c_str(),
+        obj_json["cname"].as<String>().c_str(),
+        obj_json["csopubkey"].as<String>().c_str(),
+        obj_json["csoaddr"].as<String>().c_str(),
+        obj_json["ssid"].as<String>().c_str(),
+        obj_json["password"].as<String>().c_str()
+    );
+    if (obj == nullptr) {
+        throw "[cso_config/Config::build]Not enough memory to create object";
+    }
+    return std::shared_ptr<IConfig>(obj);
 }
 
 Config::Config(
-    const char* projectID,
-    const char* projectToken,
-    const char* connectionName,
-    const char* csoPubKey,
-    const char* csoAddress
-)
-    : projectID(projectID),
-      projectToken(projectToken),
-      connectionName(connectionName),
-      csoPubKey(csoPubKey),
-      csoAddress(csoAddress) {}
+    const char* projectID, 
+    const char* projectToken, 
+    const char* connectionName, 
+    const char* csoPubKey, 
+    const char* csoAddress, 
+    const char* ssid, 
+    const char* pswd
+) : projectID(projectID),
+    projectToken(projectToken),
+    connectionName(connectionName),
+    csoPubKey(csoPubKey),
+    csoAddress(csoAddress),
+    ssid(ssid),
+    password(pswd) {}
 
 Config::~Config() noexcept {}
 
@@ -76,4 +93,12 @@ const String& Config::getCSOPublicKey() noexcept {
 
 const String& Config::getCSOAddress() noexcept {
     return this->csoAddress;
+}
+
+const String& Config::getSSID() noexcept {
+    return this->ssid;
+}
+
+const String& Config::getPassword() noexcept {
+    return this->password;
 }
