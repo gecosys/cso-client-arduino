@@ -2,7 +2,11 @@
 #include "cso_queue/queue.h"
 
 std::shared_ptr<IQueue> Queue::build(uint32_t capacity) {
-    return std::shared_ptr<IQueue>(Safe::new_obj<Queue>(capacity));
+    IQueue* obj = Safe::new_obj<Queue>(capacity);
+    if (obj == nullptr) {
+        throw "[cso_queue/Queue::build()]Not enough memory to create object";
+    }
+    return std::shared_ptr<IQueue>(obj);
 }
 
 Queue::Queue(uint32_t cap) 
@@ -10,7 +14,7 @@ Queue::Queue(uint32_t cap)
       length(0) {
     this->items = Safe::new_arr<std::shared_ptr<ItemQueue>>(this->capacity);
     if (this->items == nullptr) {
-        throw "[queue/Queue(uint32_t capacity)]Not enough mem";
+        throw "[cso_queue/Queue()]Not enough memory to create array";
     }
 }
 
@@ -28,13 +32,14 @@ bool Queue::takeIndex() noexcept {
     return false;
 }
 
-void Queue::pushMessage(std::shared_ptr<ItemQueue> item) noexcept {
+bool Queue::pushMessage(std::shared_ptr<ItemQueue> item) noexcept {
     for (uint32_t idx = 0; idx < this->capacity; ++idx) {
         if (this->items[idx].get() == nullptr) {
             this->items[idx].swap(item);
             break;
         }
-    }
+    }    
+    return true;
 }
 
 const std::shared_ptr<ItemQueue>* Queue::nextMessage() noexcept {

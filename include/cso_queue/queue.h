@@ -9,7 +9,6 @@ class Queue : public IQueue {
 private:
     uint32_t capacity;
     std::atomic<uint32_t> length;
-    // Not necessarily using smart pointer, using raw pointer is simpler
     std::shared_ptr<ItemQueue>* items;
 
 public:
@@ -28,7 +27,7 @@ public:
     // Method can invoke on many threads
 	// This method needs to be invoked before PushMessage method
 	bool takeIndex() noexcept;
-    void pushMessage(std::shared_ptr<ItemQueue> item) noexcept;
+    bool pushMessage(std::shared_ptr<ItemQueue> item) noexcept;
     const std::shared_ptr<ItemQueue>* nextMessage() noexcept;
     void clearMessage(uint64_t msgID) noexcept;
 };
