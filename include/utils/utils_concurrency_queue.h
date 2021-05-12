@@ -1,5 +1,5 @@
-#ifndef _UTILS_QUEUE_H_
-#define _UTILS_QUEUE_H_
+#ifndef _UTILS_CONCURRENCY_QUEUE_H_
+#define _UTILS_CONCURRENCY_QUEUE_H_
 
 #include <atomic>
 #include <memory>
@@ -15,7 +15,7 @@
 // Except std::unique_ptr (because it doesn't has copy constructor)
 // and raw pointer (can implement but not necessary yet)
 template<typename ValueType>
-class Queue {
+class ConcurrencyQueue {
 private:
     // "std::aligned_storage" fix struct alignment
     using storage = typename std::aligned_storage<sizeof(ValueType), alignof(ValueType)>::type;
@@ -51,7 +51,7 @@ private:
     this->spin.unlock();
 
 public:
-    Queue(uint32_t capacity) 
+    ConcurrencyQueue(uint32_t capacity) 
         : spin(), 
           size(0), 
           capacity(capacity), 
@@ -60,11 +60,11 @@ public:
         assert(this->capacity > 0);
         this->buffer = Safe::new_arr<storage>(this->capacity);
         if (this->buffer == nullptr) {
-            throw "[utils_queue/Queue(uin32_t capacity)]Not enough mem";
+            throw "[utils_concurrency_queue/ConcurrencyQueue(uin32_t capacity)]Not enough memory to create array";
         }
     }
 
-    ~Queue() noexcept {
+    ~ConcurrencyQueue() noexcept {
         delete[] this->buffer;
     }
 
@@ -92,15 +92,14 @@ public:
 
     // If "ValueType" is not std::share_ptr<T> =, this function will be complied
     template <typename T, 
-              bool IsSharePtr = std::is_same<ValueType, std::unique_ptr<T>>::value, 
+              bool IsSharePtr = std::is_same<ValueType, std::shared_ptr<T>>::value, 
               typename std::enable_if<!IsSharePtr>::type* = nullptr>
     std::pair<Error::Code, ValueType> pop() {
         uint32_t index;
         std::pair<Error::Code, ValueType> ret;
         SYNC_READ(index, ret)
-        ValueType tmp = reinterpret_cast<ValueType&>(this->buffer[index]);
-        ret.second = tmp;
-        tmp.~ValueType();
+        ValueType* ptr = reinterpret_cast<ValueType*>(std::addressof(this->buffer[index]));
+        std::swap(ret.second, *ptr);
         return ret;
     }
 
@@ -109,7 +108,7 @@ public:
     // the queue's word after "pop" to completely transfer ownership of the 
     // memory to the user.
     template <typename T, 
-              bool IsSharePtr = std::is_same<ValueType, std::unique_ptr<T>>::value,
+              bool IsSharePtr = std::is_same<ValueType, std::shared_ptr<T>>::value,
               typename std::enable_if<IsSharePtr>::type* = nullptr>
     std::pair<Error::Code, ValueType> pop() {
         uint32_t index;
@@ -120,4 +119,4 @@ public:
     }
 };
 
-#endif //_UTILS_QUEUE_H_
+#endif //_UTILS_CONCURRENCY_QUEUE_H_
