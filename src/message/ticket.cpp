@@ -12,7 +12,7 @@ uint8_t *Ticket::getToken() {
 
 Result<Ticket *> Ticket::parseBytes(uint8_t *buffer, uint8_t sizeBuffer) {
     Result<Ticket *> result;
-    if (sizeBuffer != 34) {
+    if (sizeBuffer != LENGTH_TICKET) {
         result.errorCode = ERROR_CODE_INVALID_BYTES;
         return result;
     }
@@ -26,7 +26,7 @@ Result<Ticket *> Ticket::parseBytes(uint8_t *buffer, uint8_t sizeBuffer) {
 }
 
 Result<uint8_t *> Ticket::buildBytes(uint16_t id, uint8_t token[32]) {
-    uint8_t *buffer = new uint8_t[34];
+    uint8_t *buffer = new uint8_t[LENGTH_TICKET];
     buffer[0] = (uint8_t)id;
     buffer[1] = (uint8_t)(id >> 8);
     memcpy(buffer+2, token, 32);
