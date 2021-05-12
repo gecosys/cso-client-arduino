@@ -3,7 +3,11 @@
 #include "utils/utils_hmac.h"
 
 std::shared_ptr<IParser> Parser::build() {
-    return std::shared_ptr<IParser>(Safe::new_obj<Parser>());
+    IParser* obj = Safe::new_obj<Parser>();
+    if (obj != nullptr) {
+        throw "[cso_parser/Parser::build()]Not enough memory to create object";
+    }
+    return std::shared_ptr<IParser>(obj);
 }
 
 Parser::~Parser() {}
