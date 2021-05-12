@@ -32,14 +32,13 @@ bool Queue::takeIndex() noexcept {
     return false;
 }
 
-bool Queue::pushMessage(std::shared_ptr<ItemQueue> item) noexcept {
+void Queue::pushMessage(std::shared_ptr<ItemQueue> item) noexcept {
     for (uint32_t idx = 0; idx < this->capacity; ++idx) {
         if (this->items[idx].get() == nullptr) {
             this->items[idx].swap(item);
             break;
         }
-    }    
-    return true;
+    }
 }
 
 const std::shared_ptr<ItemQueue>* Queue::nextMessage() noexcept {

@@ -27,7 +27,7 @@ public:
     // Method can invoke on many threads
 	// This method needs to be invoked before PushMessage method
 	bool takeIndex() noexcept;
-    bool pushMessage(std::shared_ptr<ItemQueue> item) noexcept;
+    void pushMessage(std::shared_ptr<ItemQueue> item) noexcept;
     const std::shared_ptr<ItemQueue>* nextMessage() noexcept;
     void clearMessage(uint64_t msgID) noexcept;
 };
