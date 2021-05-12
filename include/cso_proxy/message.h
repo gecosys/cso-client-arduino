@@ -18,21 +18,21 @@ struct ServerKey {
 
 // ServerTicket is an activation ticket from the Hub server
 struct ServerTicket {
-    std::string hubAddress;
+    String hubAddress;
+    uint16_t ticketID;
     std::shared_ptr<byte> ticketBytes;
     std::shared_ptr<byte> serverSecretKey;
-    uint16_t ticketID;
 
     ServerTicket() = default;
     ServerTicket(
         const char* hubAddress, 
+        uint16_t ticketID,
         byte* ticketBytes,
-        byte* serverSecretKey,
-        uint16_t ticketID
+        byte* serverSecretKey
     ) : hubAddress(hubAddress),
+        ticketID(ticketID),
         ticketBytes(ticketBytes),
-        serverSecretKey(serverSecretKey),
-        ticketID(ticketID) {}
+        serverSecretKey(serverSecretKey) {}
 };
 
 #endif // _CSO_PROXY_MESSAGE_H_

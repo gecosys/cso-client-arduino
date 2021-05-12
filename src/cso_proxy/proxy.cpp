@@ -2,7 +2,10 @@
 #include <BigNumber.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include <crypto/base64.h>
+#include <mbedtls/base64.h>
+extern "C" {
+    #include <crypto/base64.h>
+}
 #include "cso_proxy/proxy.h"
 #include "config/config.h"
 #include "message/ticket.h"
@@ -11,7 +14,11 @@
 #include "utils/utils_aes.h"
 
 std::shared_ptr<IProxy> Proxy::build(std::shared_ptr<IConfig> config) {
-    return std::shared_ptr<IProxy>(Safe::new_obj<Proxy>(config));
+    IProxy* obj = Safe::new_obj<Proxy>(config);
+    if (obj == nullptr) {
+        throw "[cso_proxy/Proxy::build()]Not enough memory to create object";
+    }
+    return std::shared_ptr<IProxy>(obj);
 }
 
 Proxy::Proxy(std::shared_ptr<IConfig>& config) {
@@ -263,10 +270,10 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
         Error::Nil, 
         ServerTicket(
             hubAddress.c_str(), 
+            ticketID,
             res.data,
-            secretKey.release(), // Don't use "get()" because after function done
-                                 // "std::unique_ptr's destructor" will delete memory
-            ticketID
+            secretKey.release() // Don't use "get()" because after function done
+                                // "std::unique_ptr's destructor" will delete memory
         )
     );
 }
