@@ -1,6 +1,7 @@
 #ifndef _CSO_PROXY_H_
 #define _CSO_PROXY_H_
 
+#include <string>
 #include "interface.h"
 #include "config/config.h"
 #include "utils/utils_safe.h"
@@ -21,8 +22,8 @@ private:
     Proxy() = default;
     Proxy(std::shared_ptr<IConfig>& config);
 
-    std::pair<Error::Code, String> sendPOST(const char* url, byte* buffer, uint16_t length);
-    Error::Code verifyDHKeys(const String& gKey, const String& nKey, const String& pubKey, const String& sign);
+    std::pair<Error::Code, std::string> sendPOST(const char* url, byte* buffer, uint16_t length);
+    Error::Code verifyDHKeys(const std::string& gKey, const std::string& nKey, const std::string& pubKey, const std::string& sign);
 
 public:
     Proxy(Proxy&& other) = delete;
