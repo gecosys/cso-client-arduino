@@ -1,10 +1,11 @@
 #include <esp_timer.h>
+#include <Arduino.h>
 #include "cso_queue/queue.h"
 
 std::shared_ptr<IQueue> Queue::build(uint32_t capacity) {
     IQueue* obj = Safe::new_obj<Queue>(capacity);
     if (obj == nullptr) {
-        throw "[cso_queue/Queue::build()]Not enough memory to create object";
+        throw std::runtime_error("[cso_queue/Queue::build()]Not enough memory to create object");
     }
     return std::shared_ptr<IQueue>(obj);
 }
@@ -14,7 +15,7 @@ Queue::Queue(uint32_t cap)
       length(0) {
     this->items = Safe::new_arr<std::shared_ptr<ItemQueue>>(this->capacity);
     if (this->items == nullptr) {
-        throw "[cso_queue/Queue()]Not enough memory to create array";
+        throw std::runtime_error("[cso_queue/Queue()]Not enough memory to create array");
     }
 }
 
