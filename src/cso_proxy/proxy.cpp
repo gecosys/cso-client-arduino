@@ -14,7 +14,7 @@ extern "C" {
 std::shared_ptr<IProxy> Proxy::build(std::shared_ptr<IConfig> config) {
     IProxy* obj = Safe::new_obj<Proxy>(config);
     if (obj == nullptr) {        
-        throw std::runtime_error("[cso_proxy/Proxy::build()]Not enough memory to create object");
+        throw std::runtime_error("[cso_proxy/Proxy::build(std::shared_ptr<IConfig>)]Not enough memory to create object");
     }
     return std::shared_ptr<IProxy>(obj);
 }

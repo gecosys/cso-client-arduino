@@ -5,7 +5,7 @@
 std::shared_ptr<IParser> Parser::build() {
     IParser* obj = Safe::new_obj<Parser>();
     if (obj == nullptr) {
-        throw std::runtime_error("[cso_parser/Parser::build()]Not enough memory to create object");
+        throw std::runtime_error("[cso_parser/Parser::build(...)]Not enough memory to create object");
     }
     return std::shared_ptr<IParser>(obj);
 }

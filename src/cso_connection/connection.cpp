@@ -1,9 +1,12 @@
 #include "cso_connection/connection.h"
 
+#define HEADER_SIZE 2
+#define BUFFER_SIZE 1024
+
 std::shared_ptr<IConnection> Connection::build(uint16_t queueSize) {
     IConnection* obj = Safe::new_obj<Connection>(queueSize);
     if (obj == nullptr) {
-        throw std::runtime_error("[cso_connection/Connection::build()]Not enough memory to create object");
+        throw std::runtime_error("[cso_connection/Connection::build(...)]Not enough memory to create object");
     }
     return std::shared_ptr<IConnection>(obj);
 }

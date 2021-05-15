@@ -35,10 +35,12 @@ public:
           capacity(capacity), 
           index_read(0), 
           index_write(0) {
-        assert(this->capacity > 0);
+        if (this->capacity <= 0) {
+            throw std::runtime_error("[utils_concurrency_queue/ConcurrencyQueue(...)]Capacity has to be larger than 0");
+        }
         this->buffer = Safe::new_arr<storage>(this->capacity);
         if (this->buffer == nullptr) {
-            throw std::runtime_error("[utils_concurrency_queue/ConcurrencyQueue(uin32_t capacity)]Not enough memory to create array");
+            throw std::runtime_error("[utils_concurrency_queue/ConcurrencyQueue(...)]Not enough memory to create array");
         }
     }
 

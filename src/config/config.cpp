@@ -18,7 +18,7 @@ std::shared_ptr<IConfig> Config::build(
         csoAddress
     );
     if (obj == nullptr) {
-        throw "[cso_config/Config::build]Not enough memory to create object";
+        throw "[cso_config/Config::build(...)]Not enough memory to create object";
     }
     return std::shared_ptr<IConfig>(obj);
 }
@@ -46,7 +46,7 @@ std::shared_ptr<IConfig> Config::build(const char* filePath) {
         obj_json["csoaddr"].as<String>().c_str()
     );
     if (obj == nullptr) {
-        throw "[cso_config/Config::build]Not enough memory to create object";
+        throw "[cso_config/Config::build(...)]Not enough memory to create object";
     }
     return std::shared_ptr<IConfig>(obj);
 }

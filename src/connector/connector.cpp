@@ -23,7 +23,7 @@ std::shared_ptr<IConnector> Connector::build(int32_t bufferSize, std::shared_ptr
         config
     );
     if (obj == nullptr) {
-        throw std::runtime_error("[cso_connector/Connector::build()]Not enough memory to create object");
+        throw std::runtime_error("[cso_connector/Connector::build(...)]Not enough memory to create object");
     }
     return std::shared_ptr<IConnector>(obj);
 }
@@ -38,7 +38,7 @@ std::shared_ptr<IConnector> Connector::build(
 ) {
     IConnector* obj = Safe::new_obj<Connector>(bufferSize, queue, parser, proxy, config);
     if (obj == nullptr) {
-        throw "[cso_connector/Connector::build()]Not enough memory to create object";
+        throw "[cso_connector/Connector::build(...)]Not enough memory to create object";
     }
     return std::shared_ptr<IConnector>(obj);
 }

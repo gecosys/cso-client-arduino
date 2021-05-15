@@ -5,7 +5,7 @@
 std::shared_ptr<ICounter> Counter::build(uint64_t writeIndex, uint64_t minReadIndex, uint32_t maskReadBits) {
     ICounter* obj = Safe::new_obj<Counter>(writeIndex - 1, minReadIndex, maskReadBits);
     if (obj == nullptr) {
-        throw std::runtime_error("[cso_counter/Counter::build()]Not enough memory to create object");
+        throw std::runtime_error("[cso_counter/Counter::build(...)]Not enough memory to create object");
     }
     return std::shared_ptr<ICounter>(obj);
 }
