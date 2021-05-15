@@ -12,8 +12,6 @@ private:
     String connectionName;
     String csoPubKey;
     String csoAddress;
-    String ssid;
-    String password;
 
 public:
     static std::shared_ptr<IConfig> build(
@@ -21,9 +19,7 @@ public:
         const char* projectToken,
         const char* connectionName,
         const char* csoPubKey,
-        const char* csoAddress,
-        const char* ssid,
-        const char* password
+        const char* csoAddress
     );
 
     static std::shared_ptr<IConfig> build(const char* filePath);
@@ -36,9 +32,7 @@ private:
         const char* projectToken,
         const char* connectionName,
         const char* csoPubKey,
-        const char* csoAddress,
-        const char* ssid,
-        const char* password
+        const char* csoAddress
     );
 
 public:
@@ -51,8 +45,6 @@ public:
 	const String& getConnectionName() noexcept;
 	const String& getCSOPublicKey() noexcept;
 	const String& getCSOAddress() noexcept;
-    const String& getSSID() noexcept;
-	const String& getPassword() noexcept;
 };
 
 #endif //_CONFIG_H_

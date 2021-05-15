@@ -1,4 +1,4 @@
-#include <SD_MMC.h>
+#include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include "config/config.h"
 
@@ -7,19 +7,15 @@ std::shared_ptr<IConfig> Config::build(
     const char* projectToken, 
     const char* connectionName, 
     const char* csoPubKey, 
-    const char* csoAddress, 
-    const char* ssid, 
-    const char* password
+    const char* csoAddress
 ) {
-    // If allocation fails, new_obj_s will return "nullptr"
+    // If allocation fails, "Safe::new_obj" will return "nullptr"
     IConfig* obj = Safe::new_obj<Config>(
         projectID, 
         projectToken, 
         connectionName, 
         csoPubKey, 
-        csoAddress,
-        ssid,
-        password
+        csoAddress
     );
     if (obj == nullptr) {
         throw "[cso_config/Config::build]Not enough memory to create object";
@@ -28,7 +24,7 @@ std::shared_ptr<IConfig> Config::build(
 }
 
 std::shared_ptr<IConfig> Config::build(const char* filePath) {
-    File file = SD_MMC.open(filePath, FILE_READ);
+    File file = SPIFFS.open(filePath, FILE_READ);
     if (!file) {
         return std::shared_ptr<IConfig>(Safe::new_obj<Config>());
     }
@@ -47,9 +43,7 @@ std::shared_ptr<IConfig> Config::build(const char* filePath) {
         obj_json["ptoken"].as<String>().c_str(),
         obj_json["cname"].as<String>().c_str(),
         obj_json["csopubkey"].as<String>().c_str(),
-        obj_json["csoaddr"].as<String>().c_str(),
-        obj_json["ssid"].as<String>().c_str(),
-        obj_json["password"].as<String>().c_str()
+        obj_json["csoaddr"].as<String>().c_str()
     );
     if (obj == nullptr) {
         throw "[cso_config/Config::build]Not enough memory to create object";
@@ -62,16 +56,12 @@ Config::Config(
     const char* projectToken, 
     const char* connectionName, 
     const char* csoPubKey, 
-    const char* csoAddress, 
-    const char* ssid, 
-    const char* pswd
+    const char* csoAddress
 ) : projectID(projectID),
     projectToken(projectToken),
     connectionName(connectionName),
     csoPubKey(csoPubKey),
-    csoAddress(csoAddress),
-    ssid(ssid),
-    password(pswd) {}
+    csoAddress(csoAddress) {}
 
 Config::~Config() noexcept {}
 
@@ -93,12 +83,4 @@ const String& Config::getCSOPublicKey() noexcept {
 
 const String& Config::getCSOAddress() noexcept {
     return this->csoAddress;
-}
-
-const String& Config::getSSID() noexcept {
-    return this->ssid;
-}
-
-const String& Config::getPassword() noexcept {
-    return this->password;
 }
