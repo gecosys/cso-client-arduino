@@ -8,7 +8,6 @@
 #include "cso_connection/connection.h"
 #include "message/readyticket.h"
 
-#define TAG "cso_connector"
 #define CSO_PORT 80
 #define DELAY_TIME 3000
 #define TIMESTAMP_SECS() esp_timer_get_time() / 1000000ULL
@@ -24,7 +23,7 @@ std::shared_ptr<IConnector> Connector::build(int32_t bufferSize, std::shared_ptr
         config
     );
     if (obj == nullptr) {
-        throw "[cso_connector/Connector::build()]Not enough memory to create object";
+        throw std::runtime_error("[cso_connector/Connector::build()]Not enough memory to create object");
     }
     return std::shared_ptr<IConnector>(obj);
 }
@@ -59,32 +58,34 @@ Connector::Connector(
     config(config),
     counter(nullptr),
     conn(Connection::build(bufferSize)),
-    queueMessages(Queue::build(bufferSize)) {
-    esp_log_level_set(TAG, ESP_LOG_ERROR);
-}
+    queueMessages(Queue::build(bufferSize)) {}
 
 Connector::~Connector() {}
 
 void Connector::loopReconnect() {
     Error::Code error;
     while (true) {
+        // "WiFi" will auto reconnect
+        if (WiFi.status() != WL_CONNECTED) {
+            vTaskDelay(DELAY_TIME / 3);
+            continue;
+        }
+
         error = prepare();
         if (error != Error::Nil) {
-            ESP_LOGE(TAG, "Prepare failed with error code: %d", error);
+            log_e("Prepare failed with error code: %d", error);
             vTaskDelay(DELAY_TIME);
             continue;
         }
 
         // Connect to Clound Socket system
         this->parser->setSecretKey(this->serverTicket.serverSecretKey);
-        error = this->conn->connect(
-            this->config->getSSID().c_str(), 
-            this->config->getPassword().c_str(), 
+        error = this->conn->connect( 
             this->serverTicket.hubAddress.c_str(), 
             CSO_PORT
         );
         if (error != Error::Nil) {
-            ESP_LOGE(TAG, "Connect failed with error code: %d", error);
+            log_e("Connect failed with error code: %d", error);
             vTaskDelay(DELAY_TIME);
             continue;
         }
@@ -94,7 +95,7 @@ void Connector::loopReconnect() {
         this->isDisconnected = false;
         error = this->conn->loopListen();
         if (error != Error::Nil) {
-            ESP_LOGE(TAG, "Listen failed with error code: %d", error);
+            log_e("Listen failed with error code: %d", error);
         }
         this->isDisconnected = true;
         vTaskDelay(DELAY_TIME);
@@ -125,7 +126,7 @@ void Connector::listen(Error::Code (*cb)(const char* sender, byte* data, uint16_
                     readyTicket.data->getMaskRead()
                 ));
                 if (this->counter.get() == nullptr) {
-                    ESP_LOGE(TAG, "Not enough memory to create object");   
+                    log_e("Not enough memory to create object");
                 }
             }
             return;
@@ -179,7 +180,7 @@ void Connector::listen(Error::Code (*cb)(const char* sender, byte* data, uint16_
             LENGTH_TICKET
         );
         if (error != Error::Nil) {
-            ESP_LOGE(TAG, "Activate failed with error code: %d", error);
+            log_e("Activate failed with error code: %d", error);
         }
         vTaskDelay(100);
         this->time = TIMESTAMP_SECS();
@@ -255,7 +256,6 @@ Error::Code Connector::prepare() {
     if (respExchangeKey.first != Error::Nil) {
         return respExchangeKey.first;
     }
-
     auto respRegConn =  this->proxy->registerConnection(respExchangeKey.second);
     if (respRegConn.first != Error::Nil) {
         return respRegConn.first;
@@ -265,7 +265,7 @@ Error::Code Connector::prepare() {
 }
 
 Error::Code Connector::activateConnection(uint16_t ticketID, byte* ticketBytes, uint16_t lenTicket) {
-    std::pair<Error::Code, Array<byte>> res = this->parser->buildActiveMessage(ticketID, ticketBytes, lenTicket);
+    auto res = this->parser->buildActiveMessage(ticketID, ticketBytes, lenTicket);
     if (res.first != Error::Nil) {
         return res.first;
     }
