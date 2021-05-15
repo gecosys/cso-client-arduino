@@ -22,8 +22,6 @@ public:
 private:
     friend class Safe;
     Connection(uint16_t queueSize);
-    Error::Code connectWifi(const char* ssid, const char* pswd);
-    Error::Code connectHost(const char* host, uint16_t port);
 
 public:
     Connection() = delete;
@@ -31,7 +29,7 @@ public:
     Connection(const Connection& other) = delete;
     virtual ~Connection() noexcept;
 
-    Error::Code connect(const char* ssid, const char* pswd, const char* host, uint16_t port);
+    Error::Code connect(const char* host, uint16_t port);
     Error::Code loopListen();
     Error::Code sendMessage(byte* data, uint16_t nBytes);
     Array<byte> getMessage();

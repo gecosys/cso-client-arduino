@@ -3,7 +3,7 @@
 std::shared_ptr<IConnection> Connection::build(uint16_t queueSize) {
     IConnection* obj = Safe::new_obj<Connection>(queueSize);
     if (obj == nullptr) {
-        throw "[cso_connection/Connection::build()]Not enough memory to create object";
+        throw std::runtime_error("[cso_connection/Connection::build()]Not enough memory to create object");
     }
     return std::shared_ptr<IConnection>(obj);
 }
@@ -16,12 +16,19 @@ Connection::~Connection() {
     this->client.stop();
 }
 
-Error::Code Connection::connect(const char* ssid, const char* pswd, const char* host, uint16_t port) {
-    Error::Code err = connectWifi(ssid, pswd);
-    if (err != Error::Nil) {
-        return err;
+Error::Code Connection::connect(const char* host, uint16_t port) {
+    if (this->status == Status::Connected) {
+        return Error::Nil;
     }
-    return connectHost(host, port);
+    uint8_t retry = 0;
+    while (!client.connect(host, port)) {
+        if (++retry >= 2) {
+            return Error::NotConnectServer;
+        }
+        vTaskDelay(100);
+    }
+    this->status = Status::Connected;
+    return Error::Nil;
 }
 
 Error::Code Connection::loopListen() {
@@ -114,35 +121,5 @@ Error::Code Connection::sendMessage(byte* data, uint16_t nBytes) {
 }
 
 Array<byte> Connection::getMessage() {
-    return this->nextMessage.pop<byte>().second;
-}
-
-//========
-// PRIVATE
-//========
-Error::Code Connection::connectWifi(const char* ssid, const char* pswd) {
-    uint8_t retry = 0;
-    WiFi.begin(ssid, pswd);
-    while (WiFi.status() != WL_CONNECTED) {
-        if (++retry >= 3) {
-            return Error::NotConnectServer;
-        }
-        vTaskDelay(500);
-    }
-    return Error::Nil;
-}
-
-Error::Code Connection::connectHost(const char* host, uint16_t port) {
-    if (this->status == Status::Connected) {
-        return Error::Nil;
-    }
-    uint8_t retry = 0;
-    while (!client.connect(host, port)) {
-        if (++retry >= 2) {
-            return Error::NotConnectServer;
-        }
-        vTaskDelay(100);
-    }
-    this->status = Status::Connected;
-    return Error::Nil;
+    return this->nextMessage.pop().second;
 }
