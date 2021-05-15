@@ -7,7 +7,7 @@
 class UtilsRSA {
 public:
     static void parseError(int errorCode, char *buffer, uint16_t buffLen);
-    static int verifySignature(unsigned char *publicKey, uint8_t sign[LENGTH_SIGN], uint8_t *data, uint16_t sizeData);
+    static int verifySignature(unsigned char *publicKey, uint8_t sign[LENGTH_SIGN_RSA], uint8_t *data, uint16_t sizeData);
 };
 
 #endif
