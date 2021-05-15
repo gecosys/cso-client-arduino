@@ -7,9 +7,6 @@
 #include "utils/utils_safe.h"
 #include "utils/utils_concurrency_queue.h"
 
-#define HEADER_SIZE 2
-#define BUFFER_SIZE 1024
-
 class Connection : public IConnection {
 private:
     ConcurrencyQueue<Array<byte>> nextMessage;
