@@ -222,7 +222,7 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
     UtilsDH::calcSecretKey(serverKey.nKey, clientPrivKey, BigNumber(serverPubKey.c_str()), secretKey.get());
 
     // Decrypt server ticket token
-    errorCode = UtilsAES::decrypt(
+    if (UtilsAES::decrypt(
         secretKey.get(), 
         serverTicketToken.get(), 
         lenTicketToken, 
@@ -231,15 +231,14 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
         iv.get(), 
         authenTag.get(),
         token.get()
-    );
-    if (errorCode != Error::Nil) {
-        return std::pair<Error::Code, ServerTicket>(errorCode, ServerTicket());
+    ) != SUCCESS) {
+        return std::pair<Error::Code, ServerTicket>(Error::Decrypt, ServerTicket());
     }
 
     // Parse server ticket token to bytes
     Result<byte*> res = Ticket::buildBytes(ticketID, token.get());
-    if (res.errorCode != Error::Nil) {
-        return std::pair<Error::Code, ServerTicket>(res.errorCode, ServerTicket());
+    if (res.errorCode != SUCCESS) {
+        return std::pair<Error::Code, ServerTicket>(Error::Build, ServerTicket());
     }
 
     // Done
@@ -347,8 +346,9 @@ Error::Code Proxy::verifyDHKeys(const char* gKey, const char* nKey, const char* 
         // char tt[500];
         // UtilsRSA::parseError(code, tt, 500);
         // Serial.println(tt);
+        return Error::Verify;
     }
-    return errorCode;
+    return Error::Nil;
 }
 
 Error::Code Proxy::buildEncyptToken(const char* clientPubKey, const byte* secretKey, std::unique_ptr<byte>& iv, std::unique_ptr<byte>& authenTag, std::unique_ptr<byte>& token) {
@@ -401,7 +401,7 @@ Error::Code Proxy::buildEncyptToken(const char* clientPubKey, const byte* secret
     if (token.get() == nullptr) {
         return Error::NotEnoughMem;
     }
-    return UtilsAES::encrypt(
+    if (UtilsAES::encrypt(
         secretKey, 
         decodedToken.get(), 
         lenDecodeToken, 
@@ -410,5 +410,8 @@ Error::Code Proxy::buildEncyptToken(const char* clientPubKey, const byte* secret
         iv.get(), 
         authenTag.get(),
         token.get()
-    );
+    ) != SUCCESS) {
+        return Error::Encrypt;
+    }
+    return Error::Nil;
 }
