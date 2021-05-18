@@ -34,17 +34,10 @@ std::shared_ptr<IConfig> Config::build(const char* filePath) {
     file.close();
 
     // Parse data
-    DynamicJsonDocument doc(1024);
+    // See more at: "https://arduinojson.org/v6/how-to/reuse-a-json-document/"
+    DynamicJsonDocument doc(JSON_OBJECT_SIZE(5) + data.length());
     deserializeJson(doc, data);
-    JsonObject obj_json = doc.as<JsonObject>();
-    // "JsonObject["key"].as" will return reference to value
-    IConfig* obj = Safe::new_obj<Config>(
-        obj_json["pid"].as<String>().c_str(), 
-        obj_json["ptoken"].as<String>().c_str(),
-        obj_json["cname"].as<String>().c_str(),
-        obj_json["csopubkey"].as<String>().c_str(),
-        obj_json["csoaddr"].as<String>().c_str()
-    );
+    IConfig* obj = Safe::new_obj<Config>(doc["pid"], doc["ptoken"],doc["cname"],doc["csopubkey"],doc["csoaddr"]);
     if (obj == nullptr) {
         throw "[cso_config/Config::build(...)]Not enough memory to create object";
     }
