@@ -22,8 +22,24 @@ private:
     Proxy() = default;
     Proxy(std::shared_ptr<IConfig>& config);
 
-    std::pair<Error::Code, std::string> sendPOST(const char* url, byte* buffer, uint16_t length);
-    Error::Code verifyDHKeys(const std::string& gKey, const std::string& nKey, const std::string& pubKey, const std::string& sign);
+    std::pair<Error::Code, std::string> sendPOST(
+        const char* url, 
+        byte* buffer, 
+        uint16_t length
+    );
+    Error::Code verifyDHKeys(
+        const char* gKey, 
+        const char* nKey, 
+        const char* pubKey, 
+        const char* encodeSign
+    );
+    Error::Code buildEncyptToken(
+        const char* clientPubKey, 
+        const byte* secretKey, 
+        std::unique_ptr<byte>& iv, 
+        std::unique_ptr<byte>& authenTag, 
+        std::unique_ptr<byte>& token
+    );
 
 public:
     Proxy(Proxy&& other) = delete;

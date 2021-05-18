@@ -26,30 +26,34 @@ Proxy::Proxy(std::shared_ptr<IConfig>& config) {
 Proxy::~Proxy() {}
 
 std::pair<Error::Code, ServerKey> Proxy::exchangeKey() {
-    // Make request body
-    std::unique_ptr<byte> buffer(nullptr);
-    uint16_t lenBuffer;
+    // "data" is a reference to "doc".
+    // "deserializeJson" from HTTP response to "doc" copied strings, 
+    // if put "doc" and "data" into block and extract neccessary fields into variables,
+    // we will copy strings one more time.
+    // Because all keys in JSON are used, we should keep "doc".
+    // Keeping "doc" will waste a some bytes for unnecessary fields and JsonDocument's data structure
+    DynamicJsonDocument doc(0);
+    JsonObject data;
     {
-        StaticJsonDocument<JSON_OBJECT_SIZE(2)> doc;
-        JsonObject obj = doc.to<JsonObject>();
-        obj["project_id"] = this->config->getProjectID().c_str();
-        obj["unique_name"] = this->config->getConnectionName().c_str();
+        // Build request body
+        std::unique_ptr<byte> buffer(nullptr);
+        uint16_t lenBuffer;
+        {
+            StaticJsonDocument<JSON_OBJECT_SIZE(2)> doc;
+            JsonObject obj = doc.to<JsonObject>();
+            obj["project_id"] = this->config->getProjectID().c_str();
+            obj["unique_name"] = this->config->getConnectionName().c_str();
 
-        lenBuffer = 34 + 
-                    this->config->getProjectID().length() + 
-                    this->config->getConnectionName().length();
-        buffer.reset(Safe::new_arr<byte>(lenBuffer + 1));
-        if (buffer.get() == nullptr) {
-            return std::pair<Error::Code, ServerKey>(Error::NotEnoughMem, ServerKey());
+            lenBuffer = 34 + 
+                        this->config->getProjectID().length() + 
+                        this->config->getConnectionName().length();
+            buffer.reset(Safe::new_arr<byte>(lenBuffer + 1));
+            if (buffer.get() == nullptr) {
+                return std::pair<Error::Code, ServerKey>(Error::NotEnoughMem, ServerKey());
+            }
+            serializeJson(doc, buffer.get(), lenBuffer + 1);
         }
-        serializeJson(doc, buffer.get(), lenBuffer + 1);
-    }
 
-    std::string gKey;
-    std::string nKey;
-    std::string pubKey;
-    std::string encodeSign;
-    {
         // Build URL
         std::unique_ptr<char> url(Safe::new_arr<char>(this->config->getCSOAddress().length() + 14));
         if (url.get() == nullptr) {
@@ -62,35 +66,36 @@ std::pair<Error::Code, ServerKey> Proxy::exchangeKey() {
         if (resp.first != Error::Nil) {
             return std::pair<Error::Code, ServerKey>(resp.first, ServerKey());
         }
+        if (resp.second.empty()) {
+            return std::pair<Error::Code, ServerKey>(Error::RespEmpty, ServerKey());
+        }
+
+        // "DynamicJsonDocument" is allocated on heap, so we need to free unsued memory
+        // to allocate new memory.
         delete[] url.release();
         delete[] buffer.release();
 
         // Parse response
-        if (resp.second.empty()) {
-            return std::pair<Error::Code, ServerKey>(Error::RespEmpty, ServerKey());
-        }
-        DynamicJsonDocument doc(2048);
-        deserializeJson(doc, resp.second);
-        JsonObject obj = doc.as<JsonObject>();
-        if (obj["returncode"].as<String>().toInt() != 1) {
+        // JSON string has 7 keys <=> 7 JSON_OBJECT
+        doc = DynamicJsonDocument(JSON_OBJECT_SIZE(7) + resp.second.length());
+        if (deserializeJson(doc, resp.second)) {
             return std::pair<Error::Code, ServerKey>(Error::Other, ServerKey());
         }
-        // "data" is JSON std::string which stores "exchange key" info
-        deserializeJson(doc, obj["data"].as<std::string>());
 
-        // Get info
-        gKey = obj["g_key"].as<std::string>();
-        nKey = obj["n_key"].as<std::string>();
-        pubKey = obj["pub_key"].as<std::string>();
-        encodeSign = obj["sign"].as<std::string>();
+        if ((int16_t)doc["returncode"] != 1) {
+            return std::pair<Error::Code, ServerKey>(Error::Other, ServerKey());
+        }
+        data = doc["data"];
     }
-
-    // Verify data
-    Error::Code err = verifyDHKeys(gKey, nKey, pubKey, encodeSign);
+    
+    // "JsonObject[key]" will returns a no type reference, 
+    // so we need to cast type or extract explicit by "JsonObject[key].as<type>()".
+    // However, "verifyDHKeys" function defined type params, extracting implicit will be called.
+    Error::Code err = verifyDHKeys(data["g_key"], data["n_key"], data["pub_key"], data["sign"]);
     if (err != Error::Nil) {
         return std::pair<Error::Code, ServerKey>(err, ServerKey());
     }
-    return std::pair<Error::Code, ServerKey>(Error::Nil, ServerKey(gKey.c_str(), nKey.c_str(), pubKey.c_str()));
+    return std::pair<Error::Code, ServerKey>(Error::Nil, ServerKey(data["g_key"], data["n_key"], data["pub_key"]));
 }
 
 std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& serverKey) {
@@ -99,159 +104,113 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
     if (secretKey.get() == nullptr) {
         return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
     }
-    // Because "BigNumber.tostd::string()" returned pointer to dynamic memory,
+    // Because "BigNumber.toString()" returned pointer to dynamic memory,
     // uses "std::unique_ptr" for simplicity
     BigNumber clientPrivKey = UtilsDH::generatePrivateKey();
     std::unique_ptr<char> clientPubKey(UtilsDH::calcPublicKey(serverKey.gKey, serverKey.nKey, clientPrivKey).toString());
     UtilsDH::calcSecretKey(serverKey.nKey, clientPrivKey, serverKey.pubKey, secretKey.get());
 
-    // Decode client token
-    size_t lenToken;
-    uint16_t length;
-    std::unique_ptr<byte> decodedToken(nullptr);
-    {
-        length = this->config->getProjectToken().length();
-        decodedToken.reset(Safe::new_arr<byte>(length));
-        if (decodedToken.get() == nullptr) {
-            return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
-        }
-        memcpy(decodedToken.get(), this->config->getProjectToken().c_str(), length);
-        decodedToken.reset(base64_decode(decodedToken.get(), length, &lenToken));
-        if (decodedToken == nullptr || lenToken <= 0) {
-            return std::pair<Error::Code, ServerTicket>(Error::Encrypt, ServerTicket());
-        }
-    }
-
-    // Build client aad
-    std::unique_ptr<byte> aad(nullptr);
-    {
-        uint16_t lenPubKey = strlen(clientPubKey.get());
-        uint16_t lenPID = this->config->getProjectID().length();
-        uint16_t lenCName = this->config->getConnectionName().length();
-        length = lenPID + lenCName + lenPubKey;
-        aad.reset(Safe::new_arr<byte>(length));
-        if (aad.get() == nullptr) {
-            return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
-        }
-        memcpy(aad.get(), this->config->getProjectID().c_str(), lenPID);
-        memcpy(aad.get() + lenPID, this->config->getConnectionName().c_str(), lenCName);
-        memcpy(aad.get() + (lenPID + lenCName), clientPubKey.get(), lenPubKey);
-    }
-
-    // Buil encrypt client token
-    std::unique_ptr<byte> iv(Safe::new_arr<byte>(LENGTH_IV));
-    if (iv.get() == nullptr) {
-        return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
-    }
-
-    std::unique_ptr<byte> authenTag(Safe::new_arr<byte>(LENGTH_AUTHEN_TAG));
-    if (authenTag.get() == nullptr) {
-        return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
-    }
-
-    std::unique_ptr<byte> token(Safe::new_arr<byte>(LENGTH_OUTPUT));
-    if (token.get() == nullptr) {
-        return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
-    }
-    if (UtilsAES::encrypt(
-        secretKey.get(), 
-        decodedToken.get(), 
-        lenToken, 
-        aad.get(), 
-        length, 
-        iv.get(), 
-        authenTag.get(),
-        token.get()
-    ) != SUCCESS) {
-        return std::pair<Error::Code, ServerTicket>(Error::Encrypt, ServerTicket());
-    }
-
-    // Build request body
-    std::unique_ptr<byte> buffer(nullptr);
-    {
-        size_t lenIV = 0;
-        size_t lenPToken = 0;
-        size_t lenAuthenTag = 0;
-        StaticJsonDocument<JSON_OBJECT_SIZE(2)> doc;
-        JsonObject obj = doc.as<JsonObject>();
-        obj["project_id"] = this->config->getProjectID().c_str();
-        obj["project_token"] = (char*)base64_decode(token.get(), LENGTH_IV, &lenPToken);
-        obj["unique_name"] = this->config->getConnectionName().c_str();
-        obj["public_key"] = clientPubKey.get();
-        obj["iv"] = (char*)base64_decode(iv.get(), LENGTH_OUTPUT, &lenIV);
-        obj["authen_tag"] = (char*)base64_decode(authenTag.get(), LENGTH_AUTHEN_TAG, &lenAuthenTag);
-
-        length = 93 + 
-                 lenIV +
-                 lenPToken +
-                 lenAuthenTag +
-                 strlen(clientPubKey.get()) +
-                 this->config->getProjectID().length() + 
-                 this->config->getConnectionName().length();
-        buffer.reset(Safe::new_arr<byte>(length + 1));
-        if (buffer.get() == nullptr) {
-            return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
-        }
-        serializeJson(doc, buffer.get(), length + 1);
+    // Build encrypt token
+    std::unique_ptr<byte> iv(nullptr);
+    std::unique_ptr<byte> token(nullptr);
+    std::unique_ptr<byte> authenTag(nullptr);
+    auto errorCode = buildEncyptToken(clientPubKey.get(), secretKey.get(), iv, authenTag, token);
+    if (errorCode != Error::Nil) {
+        return std::pair<Error::Code, ServerTicket>(errorCode, ServerTicket());
     }
 
     // Invoke API
     uint16_t ticketID;
+    uint16_t lenTicketToken;
     std::string hubAddress;
     std::string serverPubKey;
     std::unique_ptr<byte> serverTicketToken(nullptr);
     {
-        // Build URL
-        std::unique_ptr<char> url(Safe::new_arr<char>(this->config->getCSOAddress().length() + 21));
-        if (url.get() == nullptr) {
-            return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
-        }
-        std::sprintf(url.get(), "%s/register-connection", this->config->getCSOAddress().c_str());
+        // Build request body
+        uint16_t lenBuffer;
+        std::unique_ptr<byte> buffer(nullptr);
+        {
+            size_t lenIV = 0;
+            size_t lenPToken = 0;
+            size_t lenAuthenTag = 0;
+            StaticJsonDocument<JSON_OBJECT_SIZE(6)> doc;
+            JsonObject obj = doc.as<JsonObject>();
+            obj["project_id"] = this->config->getProjectID().c_str();
+            obj["project_token"] = (char*)base64_decode(token.get(), LENGTH_IV, &lenPToken);
+            obj["unique_name"] = this->config->getConnectionName().c_str();
+            obj["public_key"] = clientPubKey.get();
+            obj["iv"] = (char*)base64_decode(iv.get(), LENGTH_OUTPUT, &lenIV);
+            obj["authen_tag"] = (char*)base64_decode(authenTag.get(), LENGTH_AUTHEN_TAG, &lenAuthenTag);
 
-        // Send request and receive response
-        std::pair<Error::Code, std::string> resp = sendPOST(url.get(), buffer.get(), length);
-        if (resp.first != Error::Nil) {
-            return std::pair<Error::Code, ServerTicket>(resp.first, ServerTicket());
+            lenBuffer = 93 + 
+                        lenIV +
+                        lenPToken +
+                        lenAuthenTag +
+                        strlen(clientPubKey.get()) +
+                        this->config->getProjectID().length() + 
+                        this->config->getConnectionName().length();
+            buffer.reset(Safe::new_arr<byte>(lenBuffer + 1));
+            if (buffer.get() == nullptr) {
+                return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
+            }
+            serializeJson(doc, buffer.get(), lenBuffer + 1);
         }
-        delete[] url.release();
-        delete[] buffer.release();
+        
+        DynamicJsonDocument doc(0);
+        {
+            // Build URL
+            std::unique_ptr<char> url(Safe::new_arr<char>(this->config->getCSOAddress().length() + 21));
+            if (url.get() == nullptr) {
+                return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
+            }
+            std::sprintf(url.get(), "%s/register-connection", this->config->getCSOAddress().c_str());
 
-        // Parse response
-        if (resp.second.empty()) {
-            return std::pair<Error::Code, ServerTicket>(Error::RespEmpty, ServerTicket());
+            // Send request and receive response
+            std::pair<Error::Code, std::string> resp = sendPOST(url.get(), buffer.get(), lenBuffer);
+            if (resp.first != Error::Nil) {
+                return std::pair<Error::Code, ServerTicket>(resp.first, ServerTicket());
+            }
+            if (resp.second.empty()) {
+                return std::pair<Error::Code, ServerTicket>(Error::RespEmpty, ServerTicket());
+            }
+
+            // "DynamicJsonDocument" is allocated on heap, so we need to free unsued memory
+            // to allocate new memory
+            delete[] url.release();
+            delete[] buffer.release();
+
+            // Parse response
+            doc = DynamicJsonDocument(JSON_OBJECT_SIZE(9) + resp.second.length());
+            if (deserializeJson(doc, resp.second)) {
+                return std::pair<Error::Code, ServerTicket>(Error::Other, ServerTicket());
+            }
+            if ((int16_t)doc["returncode"] != 1) {
+                return std::pair<Error::Code, ServerTicket>(Error::Other, ServerTicket());
+            }
         }
-        DynamicJsonDocument doc(1024);
-        deserializeJson(doc, resp.second);
-        JsonObject obj = doc.as<JsonObject>();
-        if (obj["returncode"].as<String>().toInt() != 1) {
-            return std::pair<Error::Code, ServerTicket>(Error::Other, ServerTicket());
-        }
-        // "data" is JSON std::string which stores "register connection" info
-        deserializeJson(doc, obj["data"].as<std::string>());
 
         // Get info
-        ticketID = (uint16_t)obj["ticket_id"].as<String>().toInt();
-        serverPubKey = obj["pub_key"].as<std::string>();
-        hubAddress = obj["hub_address"].as<std::string>();
-
-        std::string str(obj["iv"].as<std::string>());
-        memcpy(iv.get(), str.c_str(), LENGTH_IV);
-
-        str = obj["auth_tag"].as<std::string>();
-        memcpy(authenTag.get(), str.c_str(), LENGTH_AUTHEN_TAG);
-
-        lenToken = str.length();
-        serverTicketToken.reset(Safe::new_arr<byte>(lenToken));
+        JsonObject data = doc["data"];
+        lenTicketToken = strlen(data["ticket_token"]);
+        serverTicketToken.reset(Safe::new_arr<byte>(lenTicketToken));
         if (serverTicketToken.get() == nullptr) {
             return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
         }
-        str = obj["ticket_token"].as<std::string>();
-        memcpy(serverTicketToken.get(), str.c_str(), lenToken);
+        
+        ticketID = (uint16_t)data["ticket_id"];
+        serverPubKey = (const char*)data["pub_key"];
+        hubAddress = (const char*)data["hub_address"];
+
+        memcpy(iv.get(), data["iv"], LENGTH_IV);
+        memcpy(authenTag.get(), data["auth_tag"], LENGTH_AUTHEN_TAG);
+        memcpy(serverTicketToken.get(), data["ticket_token"], lenTicketToken);
     }
 
     // Build server aad
-    length = 2 + hubAddress.length() + serverPubKey.length();
-    aad.reset(Safe::new_arr<byte>(length));
+    uint16_t lenAad = 2 + 
+                      hubAddress.length() + 
+                      serverPubKey.length();
+    std::unique_ptr<byte> aad(Safe::new_arr<byte>(lenAad));
     if (aad.get() == nullptr) {
         return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMem, ServerTicket());
     }
@@ -263,23 +222,24 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
     UtilsDH::calcSecretKey(serverKey.nKey, clientPrivKey, BigNumber(serverPubKey.c_str()), secretKey.get());
 
     // Decrypt server ticket token
-    if (UtilsAES::decrypt(
+    errorCode = UtilsAES::decrypt(
         secretKey.get(), 
         serverTicketToken.get(), 
-        lenToken, 
+        lenTicketToken, 
         aad.get(),
-        length,
+        lenAad,
         iv.get(), 
         authenTag.get(),
         token.get()
-    ) != SUCCESS) {
-        return std::pair<Error::Code, ServerTicket>(Error::Decrypt, ServerTicket());
+    );
+    if (errorCode != Error::Nil) {
+        return std::pair<Error::Code, ServerTicket>(errorCode, ServerTicket());
     }
 
     // Parse server ticket token to bytes
     Result<byte*> res = Ticket::buildBytes(ticketID, token.get());
-    if (res.errorCode != SUCCESS) {
-        return std::pair<Error::Code, ServerTicket>(Error::Build, ServerTicket());
+    if (res.errorCode != Error::Nil) {
+        return std::pair<Error::Code, ServerTicket>(res.errorCode, ServerTicket());
     }
 
     // Done
@@ -330,63 +290,125 @@ std::pair<Error::Code, std::string> Proxy::sendPOST(const char* url, byte* buffe
     return std::pair<Error::Code, std::string>(Error::Nil, resp);
 }
 
-Error::Code Proxy::verifyDHKeys(const std::string& gKey, const std::string& nKey, const std::string& pubKey, const std::string& encodeSign) {
-    uint16_t length = this->config->getCSOPublicKey().length();
-    std::unique_ptr<byte> pubKeyBytes(Safe::new_arr<byte>(length));
-    if (pubKeyBytes.get() == nullptr) {
-        return Error::NotEnoughMem;
-    }
+Error::Code Proxy::verifyDHKeys(const char* gKey, const char* nKey, const char* pubKey, const char* encodeSign) {
+    // uint16_t length = this->config->getCSOPublicKey().length();
+    // std::unique_ptr<byte> pubKeyBytes(Safe::new_arr<byte>(length));
+    // if (pubKeyBytes.get() == nullptr) {
+    //     return Error::NotEnoughMem;
+    // }
 
     // Build data
-    uint16_t lenGKey = gKey.length();
-    uint16_t lenNKey = nKey.length();
-    uint16_t lenPubKey = pubKey.length();
+    uint16_t lenGKey = strlen(gKey);
+    uint16_t lenNKey = strlen(nKey);
+    uint16_t lenPubKey = strlen(pubKey);
     std::unique_ptr<byte> data(Safe::new_arr<byte>(lenGKey + lenNKey + lenPubKey));
     if (data.get() == nullptr) {
         return Error::NotEnoughMem;
     }
 
-    memcpy(data.get(), gKey.c_str(), lenGKey);
-    memcpy(data.get() + lenGKey, nKey.c_str(), lenNKey);
-    memcpy(data.get() + (lenGKey + lenNKey), pubKey.c_str(), lenPubKey);
+    memcpy(data.get(), gKey, lenGKey);
+    memcpy(data.get() + lenGKey, nKey, lenNKey);
+    memcpy(data.get() + (lenGKey + lenNKey), pubKey, lenPubKey);
 
-    // Convert public key to bytes
-    memcpy(pubKeyBytes.get(), this->config->getCSOPublicKey().c_str(), length);
+    // // Convert public key to bytes
+    // memcpy(pubKeyBytes.get(), this->config->getCSOPublicKey().c_str(), length);
 
     // Decode sign to bytes
     size_t out_len = 0;
-    std::unique_ptr<byte> sign(base64_decode((const byte*)encodeSign.c_str(), encodeSign.length(), &out_len));
+    std::unique_ptr<byte> sign(base64_decode((const byte*)encodeSign, strlen(encodeSign), &out_len));
     
     // Verify
-    auto code = UtilsRSA::verifySignature(
-        pubKeyBytes.get(), 
+    auto errorCode = UtilsRSA::verifySignature(
+        (byte*)this->config->getCSOPublicKey().c_str(), 
         sign.get(), 
         data.get(), 
         lenGKey + lenNKey + lenPubKey
     );
 
-    if (code != SUCCESS) {
-        Serial.printf("GKey: %s\n", gKey.c_str());
-        Serial.printf("NKey: %s\n", nKey.c_str());
-        Serial.printf("PubKey: %s\n", pubKey.c_str());
-        Serial.printf("Sign: %s\n", encodeSign.c_str());
+    if (errorCode != Error::Nil) {
+        Serial.printf("GKey: %s\n", gKey);
+        Serial.printf("NKey: %s\n", nKey);
+        Serial.printf("PubKey: %s\n", pubKey);
+        Serial.printf("Sign: %s\n", encodeSign);
+        Serial.println(out_len);
 
-        Serial.println("Bytes signature");
-        for (uint16_t i = 0; i < out_len; ++i) {
-            Serial.printf("%d", sign.get()[i]);
-        }
-        Serial.println();
+        // Serial.println("Bytes signature");
+        // for (uint16_t i = 0; i < out_len; ++i) {
+        //     Serial.printf("%d", sign.get()[i]);
+        // }
+        // Serial.println();
         
-        Serial.println("Bytes data");
-        Serial.printf("%d\n", lenGKey + lenNKey + lenPubKey);
-        for (uint16_t i = 0; i < lenGKey + lenNKey + lenPubKey; ++i) {
-            Serial.printf("%d", data.get()[i]);
-        }
-        Serial.println();
-        char tt[500];
-        UtilsRSA::parseError(code, tt, 500);
-        Serial.println(tt);
-        return Error::Verify;
+        // Serial.println("Bytes data");
+        // Serial.printf("%d\n", lenGKey + lenNKey + lenPubKey);
+        // for (uint16_t i = 0; i < lenGKey + lenNKey + lenPubKey; ++i) {
+        //     Serial.printf("%d", data.get()[i]);
+        // }
+        // Serial.println();
+        // char tt[500];
+        // UtilsRSA::parseError(code, tt, 500);
+        // Serial.println(tt);
     }
-    return Error::Nil;
+    return errorCode;
+}
+
+Error::Code Proxy::buildEncyptToken(const char* clientPubKey, const byte* secretKey, std::unique_ptr<byte>& iv, std::unique_ptr<byte>& authenTag, std::unique_ptr<byte>& token) {
+    // Decode client token
+    size_t lenDecodeToken;
+    std::unique_ptr<byte> decodedToken(nullptr);
+    {
+        uint16_t lenEncodeToken = this->config->getProjectToken().length();
+        decodedToken.reset(Safe::new_arr<byte>(lenEncodeToken));
+        if (decodedToken.get() == nullptr) {
+            return Error::NotEnoughMem;
+        }
+
+        memcpy(decodedToken.get(), this->config->getProjectToken().c_str(), lenEncodeToken);
+        decodedToken.reset(base64_decode(decodedToken.get(), lenEncodeToken, &lenDecodeToken));
+        if (decodedToken == nullptr || lenDecodeToken <= 0) {
+            return Error::Decrypt;
+        }
+    }
+
+    // Build client aad
+    uint16_t lenAad;
+    std::unique_ptr<byte> aad(nullptr);
+    {
+        uint16_t lenPubKey = strlen(clientPubKey);
+        uint16_t lenPID = this->config->getProjectID().length();
+        uint16_t lenCName = this->config->getConnectionName().length();
+        lenAad = lenPID + lenCName + lenPubKey;
+        aad.reset(Safe::new_arr<byte>(lenAad));
+        if (aad.get() == nullptr) {
+            return Error::NotEnoughMem;
+        }
+        memcpy(aad.get(), this->config->getProjectID().c_str(), lenPID);
+        memcpy(aad.get() + lenPID, this->config->getConnectionName().c_str(), lenCName);
+        memcpy(aad.get() + (lenPID + lenCName), clientPubKey, lenPubKey);
+    }
+
+    // Buil encrypt client token
+    iv.reset(Safe::new_arr<byte>(LENGTH_IV));
+    if (iv.get() == nullptr) {
+        return Error::NotEnoughMem;
+    }
+
+    authenTag.reset(Safe::new_arr<byte>(LENGTH_AUTHEN_TAG));
+    if (authenTag.get() == nullptr) {
+        return Error::NotEnoughMem;
+    }
+
+    token.reset(Safe::new_arr<byte>(LENGTH_OUTPUT));
+    if (token.get() == nullptr) {
+        return Error::NotEnoughMem;
+    }
+    return UtilsAES::encrypt(
+        secretKey, 
+        decodedToken.get(), 
+        lenDecodeToken, 
+        aad.get(), 
+        lenAad, 
+        iv.get(), 
+        authenTag.get(),
+        token.get()
+    );
 }
