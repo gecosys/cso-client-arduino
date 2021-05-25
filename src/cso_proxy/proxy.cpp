@@ -314,36 +314,13 @@ Error::Code Proxy::verifyDHKeys(const char* gKey, const char* nKey, const char* 
     std::unique_ptr<byte> sign(base64_decode((const byte*)encodeSign.c_str(), encodeSign.length(), &sizeSign));
     
     // Verify
-    auto code = UtilsRSA::verifySignature(
+    if (UtilsRSA::verifySignature(
         (uint8_t *)this->config->getCSOPublicKey().c_str(), 
         sign.get(),
         sizeSign,
         data.get(), 
         lenGKey + lenNKey + lenPubKey
-    );
-
-    if (errorCode != Error::Nil) {
-        Serial.printf("GKey: %s\n", gKey);
-        Serial.printf("NKey: %s\n", nKey);
-        Serial.printf("PubKey: %s\n", pubKey);
-        Serial.printf("Sign: %s\n", encodeSign);
-        Serial.println(out_len);
-
-        // Serial.println("Bytes signature");
-        // for (uint16_t i = 0; i < out_len; ++i) {
-        //     Serial.printf("%d", sign.get()[i]);
-        // }
-        // Serial.println();
-        
-        // Serial.println("Bytes data");
-        // Serial.printf("%d\n", lenGKey + lenNKey + lenPubKey);
-        // for (uint16_t i = 0; i < lenGKey + lenNKey + lenPubKey; ++i) {
-        //     Serial.printf("%d", data.get()[i]);
-        // }
-        // Serial.println();
-        // char tt[500];
-        // UtilsRSA::parseError(code, tt, 500);
-        // Serial.println(tt);
+    ) != 0) {
         return Error::Verify;
     }
     return Error::Nil;
