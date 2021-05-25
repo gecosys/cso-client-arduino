@@ -331,12 +331,6 @@ std::pair<Error::Code, std::string> Proxy::sendPOST(const char* url, byte* buffe
 }
 
 Error::Code Proxy::verifyDHKeys(const std::string& gKey, const std::string& nKey, const std::string& pubKey, const std::string& encodeSign) {
-    uint16_t length = this->config->getCSOPublicKey().length();
-    std::unique_ptr<byte> pubKeyBytes(Safe::new_arr<byte>(length));
-    if (pubKeyBytes.get() == nullptr) {
-        return Error::NotEnoughMem;
-    }
-
     // Build data
     uint16_t lenGKey = gKey.length();
     uint16_t lenNKey = nKey.length();
@@ -350,17 +344,15 @@ Error::Code Proxy::verifyDHKeys(const std::string& gKey, const std::string& nKey
     memcpy(data.get() + lenGKey, nKey.c_str(), lenNKey);
     memcpy(data.get() + (lenGKey + lenNKey), pubKey.c_str(), lenPubKey);
 
-    // Convert public key to bytes
-    memcpy(pubKeyBytes.get(), this->config->getCSOPublicKey().c_str(), length);
-
     // Decode sign to bytes
-    size_t out_len = 0;
-    std::unique_ptr<byte> sign(base64_decode((const byte*)encodeSign.c_str(), encodeSign.length(), &out_len));
+    size_t sizeSign = 0;
+    std::unique_ptr<byte> sign(base64_decode((const byte*)encodeSign.c_str(), encodeSign.length(), &sizeSign));
     
     // Verify
     auto code = UtilsRSA::verifySignature(
-        pubKeyBytes.get(), 
-        sign.get(), 
+        (uint8_t *)this->config->getCSOPublicKey().c_str(), 
+        sign.get(),
+        sizeSign,
         data.get(), 
         lenGKey + lenNKey + lenPubKey
     );
@@ -372,7 +364,7 @@ Error::Code Proxy::verifyDHKeys(const std::string& gKey, const std::string& nKey
         Serial.printf("Sign: %s\n", encodeSign.c_str());
 
         Serial.println("Bytes signature");
-        for (uint16_t i = 0; i < out_len; ++i) {
+        for (uint16_t i = 0; i < sizeSign; ++i) {
             Serial.printf("%d", sign.get()[i]);
         }
         Serial.println();
