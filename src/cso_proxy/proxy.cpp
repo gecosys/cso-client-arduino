@@ -290,12 +290,6 @@ std::pair<Error::Code, std::string> Proxy::sendPOST(const char* url, byte* buffe
 }
 
 Error::Code Proxy::verifyDHKeys(const char* gKey, const char* nKey, const char* pubKey, const char* encodeSign) {
-    // uint16_t length = this->config->getCSOPublicKey().length();
-    // std::unique_ptr<byte> pubKeyBytes(Safe::new_arr<byte>(length));
-    // if (pubKeyBytes.get() == nullptr) {
-    //     return Error::NotEnoughMem;
-    // }
-
     // Build data
     uint16_t lenGKey = strlen(gKey);
     uint16_t lenNKey = strlen(nKey);
@@ -316,10 +310,14 @@ Error::Code Proxy::verifyDHKeys(const char* gKey, const char* nKey, const char* 
     size_t out_len = 0;
     std::unique_ptr<byte> sign(base64_decode((const byte*)encodeSign, strlen(encodeSign), &out_len));
     
+    size_t sizeSign = 0;
+    std::unique_ptr<byte> sign(base64_decode((const byte*)encodeSign.c_str(), encodeSign.length(), &sizeSign));
+    
     // Verify
-    auto errorCode = UtilsRSA::verifySignature(
-        (byte*)this->config->getCSOPublicKey().c_str(), 
-        sign.get(), 
+    auto code = UtilsRSA::verifySignature(
+        (uint8_t *)this->config->getCSOPublicKey().c_str(), 
+        sign.get(),
+        sizeSign,
         data.get(), 
         lenGKey + lenNKey + lenPubKey
     );

@@ -11,10 +11,10 @@ void UtilsRSA::parseError(int errorCode, char *buffer, uint16_t buffLen) {
     mbedtls_strerror(errorCode, buffer, buffLen);
 }
 
-int UtilsRSA::verifySignature(unsigned char *publicKey, uint8_t sign[LENGTH_SIGN_RSA], uint8_t *data, uint16_t sizeData) {
+int UtilsRSA::verifySignature(const unsigned char *publicKey, const uint8_t *sign, uint16_t sizeSign, const uint8_t *data, uint16_t sizeData) {
     unsigned char hashed[32];
     mbedtls_sha256((unsigned char *)data, sizeData, hashed, 0);
-    
+
     // Parse PEM
     size_t usedLen;
     mbedtls_pem_context pemCtx;
@@ -50,7 +50,7 @@ int UtilsRSA::verifySignature(unsigned char *publicKey, uint8_t sign[LENGTH_SIGN
         hashed,
         32,
         sign,
-        256
+        sizeSign
     );
     mbedtls_pem_free(&pemCtx);
     mbedtls_pk_free(&pkCtx);
