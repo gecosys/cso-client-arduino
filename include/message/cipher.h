@@ -17,7 +17,7 @@ private:
     bool isRequest;
     bool isEncrypted;
     uint8_t iv[LENGTH_IV];
-    uint8_t sign[LENGTH_SIGN];
+    uint8_t sign[LENGTH_SIGN_HMAC];
     uint8_t authenTag[LENGTH_AUTHEN_TAG];
     uint16_t sizeData;
     uint8_t *data;
@@ -25,7 +25,7 @@ private:
     char *name;
     MessageType msgType;
 
-    static Result<Array<uint8_t>> buildBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t *data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG], uint8_t sign[LENGTH_SIGN]);
+    static Result<Array<uint8_t>> buildBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t *data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG], uint8_t sign[LENGTH_SIGN_HMAC]);
 public:
     Cipher();
     ~Cipher();
@@ -38,7 +38,7 @@ public:
     void setIsRequest(bool isRequest);
     void setIsEncrypted(bool isEncrypted);
     void setIV(uint8_t iv[LENGTH_IV]);
-    void setSign(uint8_t sign[LENGTH_SIGN]);
+    void setSign(uint8_t sign[LENGTH_SIGN_HMAC]);
     void setAuthenTag(uint8_t authenTag[LENGTH_AUTHEN_TAG]);
     void setName(char *name, uint8_t lenName);
     void setData(uint8_t *data, uint16_t sizeData);
@@ -66,7 +66,7 @@ public:
     static Result<Array<uint8_t>> buildRawBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t *data, uint16_t sizeData);
     static Result<Array<uint8_t>> buildAad(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName);
     static Result<Array<uint8_t>> buildCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t *data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG]);
-    static Result<Array<uint8_t>> buildNoCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t *data, uint16_t sizeData, uint8_t sign[LENGTH_SIGN]);
+    static Result<Array<uint8_t>> buildNoCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t *data, uint16_t sizeData, uint8_t sign[LENGTH_SIGN_HMAC]);
 };
 
 #endif
