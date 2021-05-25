@@ -172,7 +172,7 @@ std::pair<Error::Code, Array<byte>> Parser::createMessage(uint64_t msgID, uint64
             std::pair<Error::Code, Array<byte>>(Error::Build, Array<byte>());
         }
 
-        std::unique_ptr<byte> sign(Safe::new_arr<byte>(LENGTH_SIGN));
+        std::unique_ptr<byte> sign(Safe::new_arr<byte>(LENGTH_SIGN_HMAC));
         if (sign.get() == nullptr) {
             std::pair<Error::Code, Array<byte>>(Error::NotEnoughMem, Array<byte>());
         }
