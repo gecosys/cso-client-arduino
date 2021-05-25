@@ -358,26 +358,6 @@ Error::Code Proxy::verifyDHKeys(const std::string& gKey, const std::string& nKey
     );
 
     if (code != SUCCESS) {
-        Serial.printf("GKey: %s\n", gKey.c_str());
-        Serial.printf("NKey: %s\n", nKey.c_str());
-        Serial.printf("PubKey: %s\n", pubKey.c_str());
-        Serial.printf("Sign: %s\n", encodeSign.c_str());
-
-        Serial.println("Bytes signature");
-        for (uint16_t i = 0; i < sizeSign; ++i) {
-            Serial.printf("%d", sign.get()[i]);
-        }
-        Serial.println();
-        
-        Serial.println("Bytes data");
-        Serial.printf("%d\n", lenGKey + lenNKey + lenPubKey);
-        for (uint16_t i = 0; i < lenGKey + lenNKey + lenPubKey; ++i) {
-            Serial.printf("%d", data.get()[i]);
-        }
-        Serial.println();
-        char tt[500];
-        UtilsRSA::parseError(code, tt, 500);
-        Serial.println(tt);
         return Error::Verify;
     }
     return Error::Nil;
