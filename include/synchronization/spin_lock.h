@@ -1,5 +1,5 @@
-#ifndef _UTILS_SPIN_LOCK_H_
-#define _UTILS_SPIN_LOCK_H_
+#ifndef _SYNCHRONIZATION_SPIN_LOCK_H_
+#define _SYNCHRONIZATION_SPIN_LOCK_H_
 
 #include <FreeRTOS.h>
 #include <freertos/portmacro.h>
@@ -19,4 +19,4 @@ public:
     void unlock();
 };
 
-#endif // _UTILS_SPIN_LOCK_H_
+#endif //_SYNCHRONIZATION_SPIN_LOCK_H_
