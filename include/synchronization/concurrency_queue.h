@@ -1,5 +1,5 @@
-#ifndef _UTILS_CONCURRENCY_QUEUE_H_
-#define _UTILS_CONCURRENCY_QUEUE_H_
+#ifndef _SYNCHRONIZATION_CONCURRENCY_QUEUE_H_
+#define _SYNCHRONIZATION_CONCURRENCY_QUEUE_H_
 
 #include <atomic>
 #include <memory>
@@ -7,13 +7,11 @@
 #include <cstring>
 #include <utility>
 #include <type_traits>
-#include "utils_code.h"
-#include "utils_safe.h"
-#include "utils_spin_lock.h"
+#include "spin_lock.h"
+#include "error/error_code.h"
 
 // "ConcurrencyQueue" is general class for any type.
-// Except std::unique_ptr (because it doesn't has copy constructor)
-// and raw pointer (can implement but not necessary yet)
+// Except raw pointer (can implement but not necessary yet)
 template<typename ValueType>
 class ConcurrencyQueue {
 private:
@@ -28,7 +26,27 @@ private:
     uint32_t index_read;
     uint32_t index_write;
 
+private:
+    bool syncPush(uint32_t& index) {
+        if (this->size.fetch_add(1) >= this->capacity) {
+            this->size.fetch_sub(1);
+            return false;
+        }
+
+        // Use "SpinLock" to guard in case multiple threads call this function together
+        this->spin.lock();
+        index = this->index_write;
+        this->index_write = (this->index_write + 1) % this->capacity;
+        this->spin.unlock();
+        return true;
+    }
+
 public:
+    ConcurrencyQueue() = delete;
+    ConcurrencyQueue(ConcurrencyQueue&& other) = delete;
+    ConcurrencyQueue(const ConcurrencyQueue& other) = delete;
+    ConcurrencyQueue& operator=(const ConcurrencyQueue& other) = delete;
+
     ConcurrencyQueue(uint32_t capacity) 
         : spin(), 
           size(0), 
@@ -38,7 +56,7 @@ public:
         if (this->capacity <= 0) {
             throw std::runtime_error("[utils_concurrency_queue/ConcurrencyQueue(...)]Capacity has to be larger than 0");
         }
-        this->buffer = Safe::new_arr<storage>(this->capacity);
+        this->buffer = new (std::nothrow) storage[this->capacity];
         if (this->buffer == nullptr) {
             throw std::runtime_error("[utils_concurrency_queue/ConcurrencyQueue(...)]Not enough memory to create array");
         }
@@ -57,21 +75,26 @@ public:
         this->spin.unlock();
     }
 
+    // This function will be called if "ValueType" has move constructor
+    template <typename std::enable_if<std::is_nothrow_move_constructible<ValueType>::value>::type* = nullptr>
     Error::Code push(ValueType&& value) {
-        return push(value);
+        uint32_t index;
+        if (!syncPush(index)) {
+            return Error::Utils_ConcurrencyQueue_Full;
+        }
+        // "std::addressof" prevents user wrong implementation "operator &"
+        // User can return address of some fields of object, not object's address
+        new (static_cast<void*>(std::addressof(this->buffer[index])))ValueType(std::move(value));
+        return Error::Nil;
     }
 
+    // This function will be called if "ValueType" has copy constructor
+    template <typename std::enable_if<std::is_nothrow_copy_constructible<ValueType>::value>::type* = nullptr>
     Error::Code push(ValueType& value) {
-        if (this->size.fetch_add(1) >= this->capacity) {
-            this->size.fetch_sub(1);
-            return Error::Full;
+        uint32_t index;
+        if (!syncPush(index)) {
+            return Error::Utils_ConcurrencyQueue_Full;
         }
-
-        // Use "SpinLock" to guard in case multiple threads call this function together
-        this->spin.lock();
-        uint32_t index = this->index_write;
-        this->index_write = (this->index_write + 1) % this->capacity;
-        this->spin.unlock();
         // "std::addressof" prevents user wrong implementation "operator &"
         // User can return address of some fields of object, not object's address
         new (static_cast<void*>(std::addressof(this->buffer[index])))ValueType(value);
@@ -81,11 +104,11 @@ public:
     std::pair<Error::Code, ValueType> pop() {
         std::pair<Error::Code, ValueType> ret(Error::Nil, ValueType());
         // Check empty
-        if (this->size.fetch_sub(1) <= 0) {
-            this->size.fetch_add(1);
-            ret.first = Error::Empty;
+        if (this->size.load() == 0) {
+            ret.first = Error::Utils_ConcurrencyQueue_Empty;
             return ret;
         }
+        this->size.fetch_sub(1);
 
         // Use "SpinLock" to guard in case multiple threads call this function together
         this->spin.lock();
@@ -102,4 +125,4 @@ public:
     }
 };
 
-#endif //_UTILS_CONCURRENCY_QUEUE_H_
+#endif //_SYNCHRONIZATION_CONCURRENCY_QUEUE_H_
