@@ -1,11 +1,12 @@
 #ifndef _MESSAGE_RESULT_H_
 #define _MESSAGE_RESULT_H_
 
-#include <stdint.h>
+#include <cstdint>
+#include "error/error_code.h"
 
 template <class T>
 struct Result {
-    uint8_t errorCode;
+    Error::Code errorCode;
     T data;
 };
 

@@ -8,125 +8,117 @@
 #include "cso_connection/connection.h"
 #include "message/readyticket.h"
 
-#define CSO_PORT 80
 #define DELAY_TIME 3000
 #define TIMESTAMP_SECS() esp_timer_get_time() / 1000000ULL
 #define TIMESTAMP_MICRO_SECS() esp_timer_get_time()
 
 // inits a new instance of Connector interface with default values
-std::shared_ptr<IConnector> Connector::build(int32_t bufferSize, std::shared_ptr<IConfig> config) {
-    IConnector* obj = Safe::new_obj<Connector>(
-        bufferSize,
-        Queue::build(bufferSize),
-        Parser::build(),
-        Proxy::build(config),
-        config
-    );
+std::unique_ptr<IConnector> Connector::build(int32_t bufferSize, std::shared_ptr<IConfig> config) {
+    auto queue = Queue::build(bufferSize);
+    auto parser = Parser::build();
+    auto proxy = Proxy::build(config);
+    IConnector* obj = new (std::nothrow) Connector(bufferSize, queue, parser, proxy,config);
     if (obj == nullptr) {
         throw std::runtime_error("[cso_connector/Connector::build(...)]Not enough memory to create object");
     }
-    return std::shared_ptr<IConnector>(obj);
+    return std::unique_ptr<IConnector>(obj);
 }
 
 // inits a new instance of Connector interface
-std::shared_ptr<IConnector> Connector::build(
-    int32_t bufferSize, 
-    std::shared_ptr<IQueue> queue,
-    std::shared_ptr<IParser> parser,
-    std::shared_ptr<IProxy> proxy,
-    std::shared_ptr<IConfig> config
-) {
-    IConnector* obj = Safe::new_obj<Connector>(bufferSize, queue, parser, proxy, config);
+std::unique_ptr<IConnector> Connector::build(int32_t bufferSize, std::unique_ptr<IQueue> queue, std::unique_ptr<IParser> parser, std::unique_ptr<IProxy> proxy, std::shared_ptr<IConfig> config) {
+    IConnector* obj = new (std::nothrow) Connector(bufferSize, queue, parser, proxy, config);
     if (obj == nullptr) {
         throw "[cso_connector/Connector::build(...)]Not enough memory to create object";
     }
-    return std::shared_ptr<IConnector>(obj);
+    return std::unique_ptr<IConnector>(obj);
 }
 
 Connector::Connector(
     int32_t bufferSize, 
-    std::shared_ptr<IQueue> queue,
-    std::shared_ptr<IParser> parser,
-    std::shared_ptr<IProxy> proxy,
-    std::shared_ptr<IConfig> config
+    std::unique_ptr<IQueue>& queue,
+    std::unique_ptr<IParser>& parser,
+    std::unique_ptr<IProxy>& proxy,
+    std::shared_ptr<IConfig>& config
 ) : time(0),
     isActivated(false),
-    isDisconnected(false),
+    isDisconnected(true),
     serverTicket(),
-    proxy(proxy),
-    parser(parser),
+    proxy(nullptr),
+    parser(nullptr),
     config(config),
     counter(nullptr),
     conn(Connection::build(bufferSize)),
-    queueMessages(Queue::build(bufferSize)) {}
+    queueMessages(nullptr) {
+   this->proxy.swap(proxy);
+   this->parser.swap(parser);
+   this->queueMessages.swap(queue);
+}
 
-Connector::~Connector() {}
+Connector::~Connector() noexcept {}
 
 void Connector::loopReconnect() {
     Error::Code error;
     while (true) {
         // "WiFi" will auto reconnect
         if (WiFi.status() != WL_CONNECTED) {
-            vTaskDelay(DELAY_TIME / 3);
+            vTaskDelay((DELAY_TIME / 3) / portTICK_PERIOD_MS);
             continue;
         }
 
         error = prepare();
         if (error != Error::Nil) {
-            log_e("Prepare failed with error code: %d", error);
-            vTaskDelay(DELAY_TIME);
+            log_e("%s", Error::getContent(error));
+            vTaskDelay(DELAY_TIME / portTICK_PERIOD_MS);
             continue;
         }
 
         // Connect to Clound Socket system
         this->parser->setSecretKey(this->serverTicket.serverSecretKey);
         error = this->conn->connect( 
-            this->serverTicket.hubAddress.c_str(), 
-            CSO_PORT
+            this->serverTicket.hubAddress.ip(), 
+            this->serverTicket.hubAddress.port()
         );
         if (error != Error::Nil) {
-            log_e("Connect failed with error code: %d", error);
-            vTaskDelay(DELAY_TIME);
+            log_e("%s", Error::getContent(error));
+            vTaskDelay(DELAY_TIME / portTICK_PERIOD_MS);
             continue;
         }
 
         // Loop to receive message
-        this->isActivated = false;
-        this->isDisconnected = false;
+        this->isDisconnected.store(false);
         error = this->conn->loopListen();
         if (error != Error::Nil) {
-            log_e("Listen failed with error code: %d", error);
+            log_e("%s", Error::getContent(error));
+            if (error == Error::CSOConnection_Disconnected) {
+                this->isActivated.store(false);
+                this->isDisconnected.store(true);
+            }
         }
-        this->isDisconnected = true;
-        vTaskDelay(DELAY_TIME);
     }
 }
 
 void Connector::listen(Error::Code (*cb)(const char* sender, byte* data, uint16_t lenData)) {
     // Receive message response
-    Array<byte> content = this->conn->getMessage();
-    if (content.ptr.get() != nullptr) {
-        auto msg = this->parser->parseReceivedMessage(content.ptr.get(), content.length);
+    Array<byte> cipher_msg = this->conn->getMessage();
+    if (cipher_msg.buffer != nullptr) {
+        auto msg = this->parser->parseReceivedMessage(cipher_msg.buffer.get(), cipher_msg.length);
         if (msg.first != Error::Nil) {
+            log_e("%s", Error::getContent(msg.first));
             return;
         }
 
         MessageType type = msg.second->getMsgType();
         // Activate the connection
         if (type == MessageType::Activation) {
-            auto readyTicket = ReadyTicket::parseBytes(msg.second->getData(), LENGTH_OUTPUT);
-            if (readyTicket.errorCode != SUCCESS || !readyTicket.data->getIsReady()) {
+            auto readyTicket = ReadyTicket::parseBytes(msg.second->getData(), msg.second->getSizeData());
+            if (readyTicket.errorCode != Error::Nil || !readyTicket.data->getIsReady()) {
                 return;
             }
-            this->isActivated = true;
-            if (this->counter.get() == nullptr) {
-                this->counter.reset(Safe::new_obj<Counter>(
-                    readyTicket.data->getIdxWrite(),
-                    readyTicket.data->getIdxRead(),
-                    readyTicket.data->getMaskRead()
-                ));
-                if (this->counter.get() == nullptr) {
-                    log_e("Not enough memory to create object");
+            this->isActivated.store(true);
+            if (this->counter == nullptr) {
+                this->counter = Counter::build(readyTicket.data->getIdxWrite(), readyTicket.data->getIdxRead(), readyTicket.data->getMaskRead());
+                if (this->counter == nullptr) {
+                    log_e("[CSO_Connector]Not enough memory to create object");
                 }
             }
             return;
@@ -162,72 +154,86 @@ void Connector::listen(Error::Code (*cb)(const char* sender, byte* data, uint16_
                 return;
             }
         }
-        doSendResponse(
+        
+        auto new_msg = this->parser->buildMessage(
             msg.second->getMsgID(), 
             msg.second->getMsgTag(),
             msg.second->getName(),
             nullptr,
             0,
-            msg.second->getIsEncrypted()
+            msg.second->getIsEncrypted(), 
+            false, 
+            true, 
+            true, 
+            false
         );
+        if (new_msg.first != Error::Nil) {
+            log_e("%s", Error::getContent(msg.first));
+            return;
+        }
+        this->conn->sendMessage(new_msg.second.buffer.get(), new_msg.second.length);
+    }
+
+    if (this->isDisconnected.load()) {
+        return;
     }
 
     // Do activate the connection
-    if (!this->isDisconnected && !this->isActivated && (TIMESTAMP_SECS() - this->time) >= 3) {
+    if (!this->isActivated.load() && (TIMESTAMP_SECS() - this->time) >= 3) {
         Error::Code error = activateConnection(
             this->serverTicket.ticketID,
             this->serverTicket.ticketBytes.get(),
             LENGTH_TICKET
         );
         if (error != Error::Nil) {
-            log_e("Activate failed with error code: %d", error);
+            log_e("%s", Error::getContent(error));
         }
-        vTaskDelay(100);
         this->time = TIMESTAMP_SECS();
         return;
     }
 
-    if (TIMESTAMP_MICRO_SECS() - this->time >= 100) {
-        auto msg = this->queueMessages->nextMessage();
-        if (msg == nullptr) {
+    // Send message in queue
+    if (this->isActivated.load() && (TIMESTAMP_MICRO_SECS() - this->time) >= 100) {
+        ItemQueueRef ref_msg = this->queueMessages->nextMessage();
+        if (ref_msg.empty()) {
             this->time = TIMESTAMP_MICRO_SECS();
             return;
         }
 
-        auto data = msg->get();
+        ItemQueue msg = ref_msg.get();
         std::pair<Error::Code, Array<byte>> content;
-        if (data->isGroup) {
+        if (msg.isGroup) {
             content = this->parser->buildGroupMessage(
-                data->msgID,
-                data->msgTag,
-                data->recvName.c_str(),
-                data->content.ptr.get(),
-                data->content.length,
-                data->isEncrypted,
-                data->isCached,
-                data->isFirst,
-                data->isLast,
-                data->isRequest
+                msg.msgID,
+                msg.msgTag,
+                msg.recvName.c_str(),
+                msg.content.buffer.get(),
+                msg.content.length,
+                msg.isEncrypted,
+                msg.isCached,
+                msg.isFirst,
+                msg.isLast,
+                msg.isRequest
             );
         } else {
             content = this->parser->buildMessage(
-                data->msgID,
-                data->msgTag,
-                data->recvName.c_str(),
-                data->content.ptr.get(),
-                data->content.length,
-                data->isEncrypted,
-                data->isCached,
-                data->isFirst,
-                data->isLast,
-                data->isRequest
+                msg.msgID,
+                msg.msgTag,
+                msg.recvName.c_str(),
+                msg.content.buffer.get(),
+                msg.content.length,
+                msg.isEncrypted,
+                msg.isCached,
+                msg.isFirst,
+                msg.isLast,
+                msg.isRequest
             );
         }
         if (content.first != Error::Nil) {
             this->time = TIMESTAMP_MICRO_SECS();
             return;
         }
-        this->conn->sendMessage(content.second.ptr.get(), content.second.length);
+        this->conn->sendMessage(content.second.buffer.get(), content.second.length);
         this->time = TIMESTAMP_MICRO_SECS();
     }
 }
@@ -256,6 +262,7 @@ Error::Code Connector::prepare() {
     if (respExchangeKey.first != Error::Nil) {
         return respExchangeKey.first;
     }
+    
     auto respRegConn =  this->proxy->registerConnection(respExchangeKey.second);
     if (respRegConn.first != Error::Nil) {
         return respRegConn.first;
@@ -265,74 +272,61 @@ Error::Code Connector::prepare() {
 }
 
 Error::Code Connector::activateConnection(uint16_t ticketID, byte* ticketBytes, uint16_t lenTicket) {
-    auto res = this->parser->buildActiveMessage(ticketID, ticketBytes, lenTicket);
-    if (res.first != Error::Nil) {
-        return res.first;
-    }
-    return this->conn->sendMessage(res.second.ptr.get(), res.second.length);
-}
-
-Error::Code Connector::doSendResponse(uint64_t msgID, uint64_t msgTag, const char* recvName, byte* data, uint16_t lenData, bool isEncrypted) {
-    auto msg = this->parser->buildMessage(
-        msgID, 
-        msgTag, 
-        recvName, 
-        data, 
-        lenData, 
-        isEncrypted, 
-        false, 
-        true, 
-        true, 
-        false
-    );
+    auto msg = this->parser->buildActiveMessage(ticketID, ticketBytes, lenTicket);
     if (msg.first != Error::Nil) {
         return msg.first;
-    }
-    return this->conn->sendMessage(msg.second.ptr.get(), msg.second.length);
+    }    
+    return this->conn->sendMessage(msg.second.buffer.get(), msg.second.length);
 }
 
 Error::Code Connector::doSendMessageNotRetry(const char* name, byte* content, uint16_t lenContent, bool isGroup, bool isEncrypted, bool isCache) {
-    if (!this->isActivated) {
-        return Error::NotReady;
+    if (!this->isActivated.load()) {
+        return Error::CSOConnector_NotActivated;
     }
     std::pair<Error::Code, Array<byte>> data;
     if (!isGroup) {
         data = this->parser->buildMessage(
-            0, 0, 
+            0, 
+            0, 
             name, 
             content, 
             lenContent, 
             isEncrypted, 
             isCache, 
-            true, true, true
+            true, 
+            true, 
+            true
         );
     } else {
         data = this->parser->buildGroupMessage(
-            0, 0, 
+            0, 
+            0, 
             name, 
             content, 
             lenContent, 
             isEncrypted, 
             isCache, 
-            true, true, true
+            true, 
+            true, 
+            true
         );
     }
     if (data.first != Error::Nil) {
         return data.first;
     }
-    return this->conn->sendMessage(data.second.ptr.get(), data.second.length);
+    return this->conn->sendMessage(data.second.buffer.get(), data.second.length);
 }
 
 Error::Code Connector::doSendMessageRetry(const char* name, byte* content, uint16_t lenContent, bool isGroup, bool isEncrypted, int32_t retry) {
-    if (!this->isActivated) {
-		return Error::NotReady;
+    if (!this->isActivated.load()) {
+		return Error::CSOConnector_NotActivated;
 	}
 
 	if (!this->queueMessages->takeIndex()) {
-		return Error::Full;
+		return Error::CSOConnector_MessageQueueFull;
 	}
 
-	this->queueMessages->pushMessage(std::shared_ptr<ItemQueue>(Safe::new_obj<ItemQueue>(
+	this->queueMessages->pushMessage(new (std::nothrow) ItemQueue(
         this->counter->nextWriteIndex(),
         0,
         name,
@@ -346,6 +340,6 @@ Error::Code Connector::doSendMessageRetry(const char* name, byte* content, uint1
         isGroup,
         retry + 1,
         0
-    )));
+    ));
 	return Error::Nil;
 }

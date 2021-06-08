@@ -2,14 +2,15 @@
 #define _CSO_QUEUE_ITEM_H_
 
 #include <memory>
+#include <string>
 #include <cstdint>
 #include <WString.h>
-#include "message/array.h"
+#include "utils/array.h"
 
 struct ItemQueue {
     uint64_t msgID;
     uint64_t msgTag;
-    String recvName;
+    std::string recvName;
     Array<uint8_t> content;
     bool isEncrypted;
     bool isCached;
@@ -20,7 +21,20 @@ struct ItemQueue {
     uint32_t numberRetry;
     uint64_t timestamp;
 
-    ItemQueue() = default;
+    ItemQueue() noexcept
+        : msgID(-1),
+          msgTag(-1),
+          recvName(""),
+          content(),
+          isEncrypted(false),
+          isCached(false),
+          isFirst(false),
+          isLast(false),
+          isRequest(false),
+          isGroup(false),
+          numberRetry(0),
+          timestamp(0) {}
+
     ItemQueue(
         uint64_t msgID,
         uint64_t msgTag,
@@ -35,18 +49,19 @@ struct ItemQueue {
         bool isGroup,
         uint32_t numberRetry,
         uint64_t timestamp
-    ) : msgID(msgID),
-        msgTag(msgTag),
-        recvName(recvName),
-        content(content, lenContent),
-        isEncrypted(isEncrypted),
-        isCached(isCached),
-        isFirst(isFirst),
-        isLast(isLast),
-        isRequest(isRequest),
-        isGroup(isGroup),
-        numberRetry(numberRetry),
-        timestamp(timestamp) {}
+    ) noexcept 
+        : msgID(msgID),
+          msgTag(msgTag),
+          recvName(recvName),
+          content(content, lenContent),
+          isEncrypted(isEncrypted),
+          isCached(isCached),
+          isFirst(isFirst),
+          isLast(isLast),
+          isRequest(isRequest),
+          isGroup(isGroup),
+          numberRetry(numberRetry),
+          timestamp(timestamp) {}
 };
 
 #endif //_CSO_QUEUE_ITEM_H_

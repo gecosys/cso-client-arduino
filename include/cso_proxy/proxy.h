@@ -3,8 +3,8 @@
 
 #include <string>
 #include "interface.h"
+#include "utils/array.h"
 #include "config/config.h"
-#include "utils/utils_safe.h"
 
 class Proxy : public IProxy {
 private:
@@ -15,36 +15,22 @@ private:
     std::shared_ptr<IConfig> config;
 
 public:
-    static std::shared_ptr<IProxy> build(std::shared_ptr<IConfig> config);
+    static std::unique_ptr<IProxy> build(std::shared_ptr<IConfig> config);
 
 private:
-    friend class Safe;
-    Proxy() = default;
     Proxy(std::shared_ptr<IConfig>& config);
 
-    std::pair<Error::Code, std::string> sendPOST(
-        const char* url, 
-        byte* buffer, 
-        uint16_t length
-    );
-    Error::Code verifyDHKeys(
-        const char* gKey, 
-        const char* nKey, 
-        const char* pubKey, 
-        const char* encodeSign
-    );
-    Error::Code buildEncyptToken(
-        const char* clientPubKey, 
-        const byte* secretKey, 
-        std::unique_ptr<byte>& iv, 
-        std::unique_ptr<byte>& authenTag, 
-        std::unique_ptr<byte>& token
-    );
+    std::pair<Error::Code, std::string> sendPOST(const char* url, byte* buffer, uint16_t length);
+    Error::Code verifyDHKeys(const char* gKey, const char* nKey, const char* pubKey, const char* encodeSign);
+    Error::Code buildEncyptToken(const char* clientPubKey, const std::unique_ptr<byte>& secretKey, std::unique_ptr<byte>& iv, std::unique_ptr<byte>& authenTag, Array<byte>& token);
 
 public:
+    Proxy() = delete;
     Proxy(Proxy&& other) = delete;
     Proxy(const Proxy& other) = delete;
-    virtual ~Proxy() noexcept;
+    Proxy& operator=(const Proxy& other) = delete;
+
+    ~Proxy() noexcept;
 
     std::pair<Error::Code, ServerKey> exchangeKey();
     std::pair<Error::Code, ServerTicket> registerConnection(const ServerKey& serverKey);

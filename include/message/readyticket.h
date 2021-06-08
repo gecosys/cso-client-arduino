@@ -1,23 +1,23 @@
 #ifndef _MESSAGE_READYTICKET_H_
 #define _MESSAGE_READYTICKET_H_
 
-#include <stdint.h>
-#include <message/result.h>
+#include <cstdint>
+#include "message/result.h"
 
 class ReadyTicket {
 private:
     bool isReady;
-    uint64_t idxRead;
     uint32_t maskRead;
+    uint64_t idxRead;
     uint64_t idxWrite;
 
 public:
-    bool getIsReady();
-    uint64_t getIdxRead();
-    uint32_t getMaskRead();
-    uint64_t getIdxWrite();
+    bool getIsReady() noexcept;
+    uint64_t getIdxRead() noexcept;
+    uint32_t getMaskRead() noexcept;
+    uint64_t getIdxWrite() noexcept;
 
-    static Result<ReadyTicket *> parseBytes(uint8_t *buffer, uint8_t sizeBuffer);
+    static Result<ReadyTicket*> parseBytes(uint8_t* buffer, uint8_t sizeBuffer) noexcept;
 };
 
 #endif

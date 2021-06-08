@@ -1,16 +1,11 @@
+#include <new>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include "config/config.h"
 
-std::shared_ptr<IConfig> Config::build(
-    const char* projectID, 
-    const char* projectToken, 
-    const char* connectionName, 
-    const char* csoPubKey, 
-    const char* csoAddress
-) {
-    // If allocation fails, "Safe::new_obj" will return "nullptr"
-    IConfig* obj = Safe::new_obj<Config>(
+std::shared_ptr<IConfig> Config::build(const char* projectID, const char* projectToken, const char* connectionName, const char* csoPubKey, const char* csoAddress) {
+    // If allocation fails, "UtilsSafe::new_obj" will return "nullptr"
+    IConfig* obj = new (std::nothrow) Config(
         projectID, 
         projectToken, 
         connectionName, 
@@ -26,7 +21,7 @@ std::shared_ptr<IConfig> Config::build(
 std::shared_ptr<IConfig> Config::build(const char* filePath) {
     File file = SPIFFS.open(filePath, FILE_READ);
     if (!file) {
-        return std::shared_ptr<IConfig>(Safe::new_obj<Config>());
+        return std::shared_ptr<IConfig>(new (std::nothrow) Config("", "", "", "", ""));
     }
 
     // Read all file
@@ -37,7 +32,7 @@ std::shared_ptr<IConfig> Config::build(const char* filePath) {
     // See more at: "https://arduinojson.org/v6/how-to/reuse-a-json-document/"
     DynamicJsonDocument doc(JSON_OBJECT_SIZE(5) + data.length());
     deserializeJson(doc, data);
-    IConfig* obj = Safe::new_obj<Config>(doc["pid"], doc["ptoken"],doc["cname"],doc["csopubkey"],doc["csoaddr"]);
+    IConfig* obj = new (std::nothrow) Config(doc["pid"], doc["ptoken"],doc["cname"],doc["csopubkey"],doc["csoaddr"]);
     if (obj == nullptr) {
         throw "[cso_config/Config::build(...)]Not enough memory to create object";
     }
@@ -50,7 +45,8 @@ Config::Config(
     const char* connectionName, 
     const char* csoPubKey, 
     const char* csoAddress
-) : projectID(projectID),
+) noexcept
+  : projectID(projectID),
     projectToken(projectToken),
     connectionName(connectionName),
     csoPubKey(csoPubKey),
@@ -58,22 +54,22 @@ Config::Config(
 
 Config::~Config() noexcept {}
 
-const String& Config::getProjectID() noexcept {
+const std::string& Config::getProjectID() noexcept {
     return this->projectID;
 }
 
-const String& Config::getProjectToken() noexcept {
+const std::string& Config::getProjectToken() noexcept {
     return this->projectToken;
 }
 
-const String& Config::getConnectionName() noexcept {
+const std::string& Config::getConnectionName() noexcept {
     return this->connectionName;
 }
 
-const String& Config::getCSOPublicKey() noexcept {
+const std::string& Config::getCSOPublicKey() noexcept {
     return this->csoPubKey;
 }
 
-const String& Config::getCSOAddress() noexcept {
+const std::string& Config::getCSOAddress() noexcept {
     return this->csoAddress;
 }

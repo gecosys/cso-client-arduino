@@ -2,29 +2,32 @@
 #define _CSO_CONNECTION_H_
 
 #include <WiFi.h>
+#include <atomic>
 #include "status.h"
 #include "interface.h"
-#include "utils/utils_safe.h"
-#include "utils/utils_concurrency_queue.h"
+#include "synchronization/concurrency_queue.h"
 
 class Connection : public IConnection {
 private:
     ConcurrencyQueue<Array<byte>> nextMessage;
+    std::atomic<uint8_t> status;
     WiFiClient client;
-    Status::Code status;
 
 public:
-    static std::shared_ptr<IConnection> build(uint16_t queueSize);
+    static std::unique_ptr<IConnection> build(uint16_t queueSize);
 
 private:
-    friend class Safe;
     Connection(uint16_t queueSize);
+    
+    bool setup() noexcept;
 
 public:
     Connection() = delete;
     Connection(Connection&& other) = delete;
     Connection(const Connection& other) = delete;
-    virtual ~Connection() noexcept;
+    Connection& operator=(const Connection& other) = delete;
+
+    ~Connection() noexcept;
 
     Error::Code connect(const char* host, uint16_t port);
     Error::Code loopListen();

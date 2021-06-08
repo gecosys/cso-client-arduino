@@ -2,8 +2,8 @@
 #define _CSO_CONNECTION_INTERFACE_H_
 
 #include <Arduino.h>
-#include <message/array.h>
-#include "utils/utils_code.h"
+#include "utils/array.h"
+#include "error/error_code.h"
 
 class IConnection {
 public:

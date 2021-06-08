@@ -4,7 +4,7 @@
 #include <memory>
 #include <utility>
 #include "message.h"
-#include "utils/utils_code.h"
+#include "error/error_code.h"
 
 class IProxy {
 public:

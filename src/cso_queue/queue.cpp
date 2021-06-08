@@ -1,19 +1,18 @@
 #include <esp_timer.h>
-#include <Arduino.h>
 #include "cso_queue/queue.h"
 
-std::shared_ptr<IQueue> Queue::build(uint32_t capacity) {
-    IQueue* obj = Safe::new_obj<Queue>(capacity);
+std::unique_ptr<IQueue> Queue::build(uint32_t capacity) {
+    IQueue* obj = new (std::nothrow) Queue(capacity);
     if (obj == nullptr) {
         throw std::runtime_error("[cso_queue/Queue::build(...)]Not enough memory to create object");
     }
-    return std::shared_ptr<IQueue>(obj);
+    return std::unique_ptr<IQueue>(obj);
 }
 
 Queue::Queue(uint32_t cap) 
     : capacity(cap),
       length(0) {
-    this->items = Safe::new_arr<std::shared_ptr<ItemQueue>>(this->capacity);
+    this->items = new (std::nothrow) std::unique_ptr<ItemQueue>[this->capacity];
     if (this->items == nullptr) {
         throw std::runtime_error("[cso_queue/Queue(...)]Not enough memory to create array");
     }
@@ -33,33 +32,33 @@ bool Queue::takeIndex() noexcept {
     return false;
 }
 
-void Queue::pushMessage(std::shared_ptr<ItemQueue> item) noexcept {
+void Queue::pushMessage(ItemQueue* item) noexcept {
     for (uint32_t idx = 0; idx < this->capacity; ++idx) {
-        if (this->items[idx].get() == nullptr) {
-            this->items[idx].swap(item);
+        if (this->items[idx] == nullptr) {
+            this->items[idx].reset(item);
             break;
         }
     }
 }
 
-const std::shared_ptr<ItemQueue>* Queue::nextMessage() noexcept {
-    std::shared_ptr<ItemQueue>* nextItem = nullptr;
+ItemQueueRef Queue::nextMessage() noexcept {
+    ItemQueue* nextItem = nullptr;
     uint64_t now = esp_timer_get_time() / 1000000ULL; // (seconds)
     for (uint32_t idx = 0; idx < this->capacity; ++idx) {
-        if (this->items[idx].get() == nullptr) {
+        if (this->items[idx] == nullptr) {
            continue;
         }
         if (nextItem == nullptr && (now - this->items[idx]->timestamp) >= 3) {
-            nextItem = &this->items[idx];
-            (*nextItem)->timestamp = now;
-            (*nextItem)->numberRetry--;
+            nextItem = this->items[idx].get();
+            nextItem->timestamp = now;
+            nextItem->numberRetry--;
         }
         if (this->items[idx]->numberRetry == 0) {
             this->items[idx].reset();
             this->length.fetch_sub(1);
         }
     }
-    return nextItem;
+    return ItemQueueRef(nextItem);
 }
 
 void Queue::clearMessage(uint64_t msgID) noexcept {

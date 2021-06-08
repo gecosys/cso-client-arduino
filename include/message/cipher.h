@@ -2,9 +2,9 @@
 #define _MESSAGE_CIPHER_H_
 
 #include <memory>
-#include <stdint.h>
+#include <cstdint>
+#include "utils/array.h"
 #include "message/type.h"
-#include "message/array.h"
 #include "message/define.h"
 #include "message/result.h"
 
@@ -20,53 +20,54 @@ private:
     uint8_t sign[LENGTH_SIGN_HMAC];
     uint8_t authenTag[LENGTH_AUTHEN_TAG];
     uint16_t sizeData;
-    uint8_t *data;
+    uint8_t* data;
     uint8_t lenName;
-    char *name;
+    char* name;
     MessageType msgType;
 
-    static Result<Array<uint8_t>> buildBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t *data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG], uint8_t sign[LENGTH_SIGN_HMAC]);
+    static Result<Array<uint8_t>> buildBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t* data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG], uint8_t sign[LENGTH_SIGN_HMAC]) noexcept;
+
 public:
-    Cipher();
-    ~Cipher();
+    Cipher() noexcept;
+    ~Cipher() noexcept;
 
-    void setMsgID(uint64_t msgID);
-    void setMsgTag(uint64_t msgTag);
-    void setMsgType(MessageType msgType);
-    void setIsFirst(bool isFirst);
-    void setIsLast(bool isLast);
-    void setIsRequest(bool isRequest);
-    void setIsEncrypted(bool isEncrypted);
-    void setIV(uint8_t iv[LENGTH_IV]);
-    void setSign(uint8_t sign[LENGTH_SIGN_HMAC]);
-    void setAuthenTag(uint8_t authenTag[LENGTH_AUTHEN_TAG]);
-    void setName(char *name, uint8_t lenName);
-    void setData(uint8_t *data, uint16_t sizeData);
+    void setMsgID(uint64_t msgID) noexcept;
+    void setMsgTag(uint64_t msgTag) noexcept;
+    void setMsgType(MessageType msgType) noexcept;
+    void setIsFirst(bool isFirst) noexcept;
+    void setIsLast(bool isLast) noexcept;
+    void setIsRequest(bool isRequest) noexcept;
+    void setIsEncrypted(bool isEncrypted) noexcept;
+    void setIV(uint8_t iv[LENGTH_IV]) noexcept;
+    void setSign(uint8_t sign[LENGTH_SIGN_HMAC]) noexcept;
+    void setAuthenTag(uint8_t authenTag[LENGTH_AUTHEN_TAG]) noexcept;
+    void setName(char* name, uint8_t lenName) noexcept;
+    void setData(uint8_t* data, uint16_t sizeData) noexcept;
 
-    uint64_t getMsgID();
-    uint64_t getMsgTag();
-    MessageType getMsgType();
-    bool getIsFirst();
-    bool getIsLast();
-    bool getIsRequest();
-    bool getIsEncrypted();
-    uint8_t *getIV();
-    uint8_t *getSign();
-    uint8_t *getAuthenTag();
-    char *getName();
-    uint8_t getLengthName();
-    uint8_t *getData(); // Referent to properties
-    uint16_t getSizeData();
+    uint64_t getMsgID() noexcept;
+    uint64_t getMsgTag() noexcept;
+    MessageType getMsgType() noexcept;
+    bool getIsFirst() noexcept;
+    bool getIsLast() noexcept;
+    bool getIsRequest() noexcept;
+    bool getIsEncrypted() noexcept;
+    uint8_t* getIV() noexcept;
+    uint8_t* getSign() noexcept;
+    uint8_t* getAuthenTag() noexcept;
+    char* getName() noexcept;
+    uint8_t getLengthName() noexcept;
+    uint8_t* getData() noexcept; // Referent to properties
+    uint16_t getSizeData() noexcept;
 
-    Result<Array<uint8_t>> intoBytes();
-    Result<Array<uint8_t>> getRawBytes();
-    Result<Array<uint8_t>> getAad();
+    Result<Array<uint8_t>> intoBytes() noexcept;
+    Result<Array<uint8_t>> getRawBytes() noexcept;
+    Result<Array<uint8_t>> getAad() noexcept;
 
-    static Result<std::shared_ptr<Cipher>> parseBytes(uint8_t *buffer, uint16_t sizeBuffer);
-    static Result<Array<uint8_t>> buildRawBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t *data, uint16_t sizeData);
-    static Result<Array<uint8_t>> buildAad(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName);
-    static Result<Array<uint8_t>> buildCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t *data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG]);
-    static Result<Array<uint8_t>> buildNoCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char *name, uint8_t lenName, uint8_t *data, uint16_t sizeData, uint8_t sign[LENGTH_SIGN_HMAC]);
+    static Result<std::unique_ptr<Cipher>> parseBytes(uint8_t* buffer, uint16_t sizeBuffer) noexcept;
+    static Result<Array<uint8_t>> buildRawBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName, uint8_t* data, uint16_t sizeData) noexcept;
+    static Result<Array<uint8_t>> buildAad(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName) noexcept;
+    static Result<Array<uint8_t>> buildCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t* data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG]) noexcept;
+    static Result<Array<uint8_t>> buildNoCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName, uint8_t* data, uint16_t sizeData, uint8_t sign[LENGTH_SIGN_HMAC]) noexcept;
 };
 
 #endif
