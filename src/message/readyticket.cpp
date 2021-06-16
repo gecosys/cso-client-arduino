@@ -30,7 +30,7 @@ Result<ReadyTicket*> ReadyTicket::parseBytes(uint8_t* buffer, uint8_t sizeBuffer
         return result;
     }
 
-    ReadyTicket* readyTicket = new (std::nothrow) ReadyTicket();
+    ReadyTicket* readyTicket = new ReadyTicket();
     if (readyTicket == nullptr) {
         result.errorCode = Error::NotEnoughMemory;
         return result;

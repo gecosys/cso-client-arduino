@@ -17,20 +17,12 @@ std::unique_ptr<IConnector> Connector::build(int32_t bufferSize, std::shared_ptr
     auto queue = Queue::build(bufferSize);
     auto parser = Parser::build();
     auto proxy = Proxy::build(config);
-    IConnector* obj = new (std::nothrow) Connector(bufferSize, queue, parser, proxy,config);
-    if (obj == nullptr) {
-        throw std::runtime_error("[cso_connector/Connector::build(...)]Not enough memory to create object");
-    }
-    return std::unique_ptr<IConnector>(obj);
+    return std::unique_ptr<IConnector>(new Connector(bufferSize, queue, parser, proxy,config));
 }
 
 // inits a new instance of Connector interface
 std::unique_ptr<IConnector> Connector::build(int32_t bufferSize, std::unique_ptr<IQueue> queue, std::unique_ptr<IParser> parser, std::unique_ptr<IProxy> proxy, std::shared_ptr<IConfig> config) {
-    IConnector* obj = new (std::nothrow) Connector(bufferSize, queue, parser, proxy, config);
-    if (obj == nullptr) {
-        throw "[cso_connector/Connector::build(...)]Not enough memory to create object";
-    }
-    return std::unique_ptr<IConnector>(obj);
+    return std::unique_ptr<IConnector>(new Connector(bufferSize, queue, parser, proxy, config));
 }
 
 Connector::Connector(
@@ -75,8 +67,8 @@ void Connector::loopReconnect() {
         // Connect to Clound Socket system
         this->parser->setSecretKey(this->serverTicket.serverSecretKey);
         error = this->conn->connect( 
-            this->serverTicket.hubAddress.ip(), 
-            this->serverTicket.hubAddress.port()
+            this->serverTicket.hubIP.c_str(), 
+            this->serverTicket.hubPort
         );
         if (error != Error::Nil) {
             log_e("%s", Error::getContent(error));
@@ -97,20 +89,20 @@ void Connector::loopReconnect() {
     }
 }
 
-void Connector::listen(Error::Code (*cb)(const char* sender, byte* data, uint16_t lenData)) {
+void Connector::listen(Error::Code (*cb)(const char* sender, uint8_t* data, uint16_t lenData)) {
     // Receive message response
-    Array<byte> cipher_msg = this->conn->getMessage();
+    Array<uint8_t> cipher_msg = this->conn->getMessage();
     if (cipher_msg.buffer != nullptr) {
         auto msg = this->parser->parseReceivedMessage(cipher_msg.buffer.get(), cipher_msg.length);
-        if (msg.first != Error::Nil) {
-            log_e("%s", Error::getContent(msg.first));
+        if (msg.errorCode != Error::Nil) {
+            log_e("%s", Error::getContent(msg.errorCode));
             return;
         }
 
-        MessageType type = msg.second->getMsgType();
+        MessageType type = msg.data->getMsgType();
         // Activate the connection
         if (type == MessageType::Activation) {
-            auto readyTicket = ReadyTicket::parseBytes(msg.second->getData(), msg.second->getSizeData());
+            auto readyTicket = ReadyTicket::parseBytes(msg.data->getData(), msg.data->getSizeData());
             if (readyTicket.errorCode != Error::Nil || !readyTicket.data->getIsReady()) {
                 return;
             }
@@ -136,42 +128,42 @@ void Connector::listen(Error::Code (*cb)(const char* sender, byte* data, uint16_
             return;
         }
 
-        if (msg.second->getMsgID() == 0) {
-            if (msg.second->getIsRequest()) {
-                cb(msg.second->getName(), msg.second->getData(), msg.second->getSizeData());
+        if (msg.data->getMsgID() == 0) {
+            if (msg.data->getIsRequest()) {
+                cb(msg.data->getName(), msg.data->getData(), msg.data->getSizeData());
             }
             return;
         }
 
-        if (!msg.second->getIsRequest()) { //response
-            this->queueMessages->clearMessage(msg.second->getMsgID());
+        if (!msg.data->getIsRequest()) { //response
+            this->queueMessages->clearMessage(msg.data->getMsgID());
             return;
         }
 
-        if (this->counter->markReadDone(msg.second->getMsgTag())) {
-            if (cb(msg.second->getName(), msg.second->getData(), msg.second->getSizeData()) != Error::Nil) {
-                this->counter->markReadUnused(msg.second->getMsgTag());
+        if (this->counter->markReadDone(msg.data->getMsgTag())) {
+            if (cb(msg.data->getName(), msg.data->getData(), msg.data->getSizeData()) != Error::Nil) {
+                this->counter->markReadUnused(msg.data->getMsgTag());
                 return;
             }
         }
         
         auto new_msg = this->parser->buildMessage(
-            msg.second->getMsgID(), 
-            msg.second->getMsgTag(),
-            msg.second->getName(),
+            msg.data->getMsgID(), 
+            msg.data->getMsgTag(),
+            msg.data->getName(),
             nullptr,
             0,
-            msg.second->getIsEncrypted(), 
+            msg.data->getIsEncrypted(), 
             false, 
             true, 
             true, 
             false
         );
-        if (new_msg.first != Error::Nil) {
-            log_e("%s", Error::getContent(msg.first));
+        if (new_msg.errorCode != Error::Nil) {
+            log_e("%s", Error::getContent(msg.errorCode));
             return;
         }
-        this->conn->sendMessage(new_msg.second.buffer.get(), new_msg.second.length);
+        this->conn->sendMessage(new_msg.data.buffer.get(), new_msg.data.length);
     }
 
     if (this->isDisconnected.load()) {
@@ -200,8 +192,8 @@ void Connector::listen(Error::Code (*cb)(const char* sender, byte* data, uint16_
             return;
         }
 
-        ItemQueue msg = ref_msg.get();
-        std::pair<Error::Code, Array<byte>> content;
+        ItemQueue& msg = ref_msg.get();
+        Result<Array<uint8_t>> content;
         if (msg.isGroup) {
             content = this->parser->buildGroupMessage(
                 msg.msgID,
@@ -229,28 +221,28 @@ void Connector::listen(Error::Code (*cb)(const char* sender, byte* data, uint16_
                 msg.isRequest
             );
         }
-        if (content.first != Error::Nil) {
+        if (content.errorCode != Error::Nil) {
             this->time = TIMESTAMP_MICRO_SECS();
             return;
         }
-        this->conn->sendMessage(content.second.buffer.get(), content.second.length);
+        this->conn->sendMessage(content.data.buffer.get(), content.data.length);
         this->time = TIMESTAMP_MICRO_SECS();
     }
 }
 
-Error::Code Connector::sendMessage(const char* recvName, byte* content, uint16_t lenContent, bool isEncrypted, bool isCache) {
+Error::Code Connector::sendMessage(const char* recvName, uint8_t* content, uint16_t lenContent, bool isEncrypted, bool isCache) {
     return doSendMessageNotRetry(recvName, content, lenContent, false, isEncrypted, isCache);
 }
 
-Error::Code Connector::sendGroupMessage(const char* groupName, byte* content, uint16_t lenContent, bool isEncrypted, bool isCache) {
+Error::Code Connector::sendGroupMessage(const char* groupName, uint8_t* content, uint16_t lenContent, bool isEncrypted, bool isCache) {
     return doSendMessageNotRetry(groupName, content, lenContent, true, isEncrypted, isCache);
 }
 
-Error::Code Connector::sendMessageAndRetry(const char* recvName, byte* content, uint16_t lenContent, bool isEncrypted, int32_t retry) {
+Error::Code Connector::sendMessageAndRetry(const char* recvName, uint8_t* content, uint16_t lenContent, bool isEncrypted, int32_t retry) {
     return doSendMessageRetry(recvName, content, lenContent, false, isEncrypted, retry);
 }
 
-Error::Code Connector::sendGroupMessageAndRetry(const char* groupName, byte* content, uint16_t lenContent, bool isEncrypted, int32_t retry) {
+Error::Code Connector::sendGroupMessageAndRetry(const char* groupName, uint8_t* content, uint16_t lenContent, bool isEncrypted, int32_t retry) {
     return doSendMessageRetry(groupName, content, lenContent, true, isEncrypted, retry);
 }
 
@@ -259,31 +251,31 @@ Error::Code Connector::sendGroupMessageAndRetry(const char* groupName, byte* con
 //========
 Error::Code Connector::prepare() {
     auto respExchangeKey = this->proxy->exchangeKey();
-    if (respExchangeKey.first != Error::Nil) {
-        return respExchangeKey.first;
+    if (respExchangeKey.errorCode != Error::Nil) {
+        return respExchangeKey.errorCode;
     }
     
-    auto respRegConn =  this->proxy->registerConnection(respExchangeKey.second);
-    if (respRegConn.first != Error::Nil) {
-        return respRegConn.first;
+    auto respRegConn =  this->proxy->registerConnection(respExchangeKey.data);
+    if (respRegConn.errorCode != Error::Nil) {
+        return respRegConn.errorCode;
     }
-    this->serverTicket = respRegConn.second;
+    std::swap(this->serverTicket, respRegConn.data);
     return Error::Nil;
 }
 
-Error::Code Connector::activateConnection(uint16_t ticketID, byte* ticketBytes, uint16_t lenTicket) {
+Error::Code Connector::activateConnection(uint16_t ticketID, uint8_t* ticketBytes, uint16_t lenTicket) {
     auto msg = this->parser->buildActiveMessage(ticketID, ticketBytes, lenTicket);
-    if (msg.first != Error::Nil) {
-        return msg.first;
+    if (msg.errorCode != Error::Nil) {
+        return msg.errorCode;
     }    
-    return this->conn->sendMessage(msg.second.buffer.get(), msg.second.length);
+    return this->conn->sendMessage(msg.data.buffer.get(), msg.data.length);
 }
 
-Error::Code Connector::doSendMessageNotRetry(const char* name, byte* content, uint16_t lenContent, bool isGroup, bool isEncrypted, bool isCache) {
+Error::Code Connector::doSendMessageNotRetry(const char* name, uint8_t* content, uint16_t lenContent, bool isGroup, bool isEncrypted, bool isCache) {
     if (!this->isActivated.load()) {
         return Error::CSOConnector_NotActivated;
     }
-    std::pair<Error::Code, Array<byte>> data;
+    Result<Array<uint8_t>> data;
     if (!isGroup) {
         data = this->parser->buildMessage(
             0, 
@@ -311,13 +303,13 @@ Error::Code Connector::doSendMessageNotRetry(const char* name, byte* content, ui
             true
         );
     }
-    if (data.first != Error::Nil) {
-        return data.first;
+    if (data.errorCode != Error::Nil) {
+        return data.errorCode;
     }
-    return this->conn->sendMessage(data.second.buffer.get(), data.second.length);
+    return this->conn->sendMessage(data.data.buffer.get(), data.data.length);
 }
 
-Error::Code Connector::doSendMessageRetry(const char* name, byte* content, uint16_t lenContent, bool isGroup, bool isEncrypted, int32_t retry) {
+Error::Code Connector::doSendMessageRetry(const char* name, uint8_t* content, uint16_t lenContent, bool isGroup, bool isEncrypted, int32_t retry) {
     if (!this->isActivated.load()) {
 		return Error::CSOConnector_NotActivated;
 	}
@@ -326,7 +318,7 @@ Error::Code Connector::doSendMessageRetry(const char* name, byte* content, uint1
 		return Error::CSOConnector_MessageQueueFull;
 	}
 
-	this->queueMessages->pushMessage(new (std::nothrow) ItemQueue(
+	this->queueMessages->pushMessage(new ItemQueue(
         this->counter->nextWriteIndex(),
         0,
         name,

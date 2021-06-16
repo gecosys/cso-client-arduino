@@ -1,14 +1,18 @@
-#ifndef _UTILS_ARRAY_H_
-#define _UTILS_ARRAY_H_
+#ifndef _SYNCHRONIZATION_ARRAY_H_
+#define _SYNCHRONIZATION_ARRAY_H_
 
 #include <memory>
 #include <cstdint>
+#include <cstring>
+#include "error/error_code.h"
 
 template<typename T>
-struct Array {
+class Array {
+public:
     std::unique_ptr<T> buffer;
     size_t length;
 
+public:
     Array() noexcept
       : buffer(nullptr), 
         length(0) {}
@@ -23,22 +27,23 @@ struct Array {
        this->buffer.swap(other.buffer);
     }
 
-    Array(const Array<T>& other) noexcept(std::is_nothrow_copy_constructible<T>::value)
-      : buffer(nullptr),
-        length(0) {
-       this->buffer.reset(new (std::nothrow) T[other.length]);
-       if (this->buffer == nullptr) {
-         return;
-       }
-       this->length = other.length;
-       memcpy(this->buffer.get(), other.buffer.get(), other.length);
-    }
-
+    Array<T>& operator=(const Array<T>& other) = delete;
     Array<T>& operator=(Array<T>&& other) noexcept {
       this->length = other.length;
       this->buffer.swap(other.buffer);
       return *this;
     }
+
+    Error::Code copy(const Array<T>& other) noexcept {
+      T* temp = new (std::nothrow) T[other.length];
+      if (temp == nullptr) {
+        return Error::NotEnoughMemory;
+      }
+      this->length = other.length;
+      this->buffer.reset(temp);
+      memcpy(this->buffer.get(), other.buffer.get(), other.length);
+      return Error::Nil;
+    }
 };
 
-#endif //_UTILS_ARRAY_H_
+#endif //_SYNCHRONIZATION_ARRAY_H_

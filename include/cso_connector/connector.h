@@ -41,9 +41,9 @@ private:
     );
 
     Error::Code prepare();
-    Error::Code activateConnection(uint16_t ticketID, byte* ticketBytes, uint16_t lenTicket);
-    Error::Code doSendMessageNotRetry(const char* name, byte* content, uint16_t lenContent, bool isGroup,bool isEncrypted, bool isCache);
-    Error::Code doSendMessageRetry(const char* recvName, byte* content, uint16_t lenContent, bool isGroup,bool isEncrypted, int32_t retry);
+    Error::Code activateConnection(uint16_t ticketID, uint8_t* ticketBytes, uint16_t lenTicket);
+    Error::Code doSendMessageNotRetry(const char* name, uint8_t* content, uint16_t lenContent, bool isGroup,bool isEncrypted, bool isCache);
+    Error::Code doSendMessageRetry(const char* recvName, uint8_t* content, uint16_t lenContent, bool isGroup,bool isEncrypted, int32_t retry);
 
 public:
     Connector() = delete;
@@ -54,12 +54,12 @@ public:
     ~Connector() noexcept;
 
     void loopReconnect();
-    void listen(Error::Code (*cb)(const char* sender, byte* data, uint16_t lenData));
+    void listen(Error::Code (*cb)(const char* sender, uint8_t* data, uint16_t lenData));
 
-    Error::Code sendMessage(const char* recvName, byte* content, uint16_t lenContent, bool isEncrypted, bool isCache);
-    Error::Code sendGroupMessage(const char* groupName, byte* content, uint16_t lenContent, bool isEncrypted, bool isCache);
-    Error::Code sendMessageAndRetry(const char* recvName, byte* content, uint16_t lenContent, bool isEncrypted, int32_t retry);
-    Error::Code sendGroupMessageAndRetry(const char* groupName, byte* content, uint16_t lenContent, bool isEncrypted, int32_t retry);
+    Error::Code sendMessage(const char* recvName, uint8_t* content, uint16_t lenContent, bool isEncrypted, bool isCache);
+    Error::Code sendGroupMessage(const char* groupName, uint8_t* content, uint16_t lenContent, bool isEncrypted, bool isCache);
+    Error::Code sendMessageAndRetry(const char* recvName, uint8_t* content, uint16_t lenContent, bool isEncrypted, int32_t retry);
+    Error::Code sendGroupMessageAndRetry(const char* groupName, uint8_t* content, uint16_t lenContent, bool isEncrypted, int32_t retry);
 };
 
 #endif //_CSO_CONNECTOR_H_

@@ -11,6 +11,6 @@ public:
     ItemQueueRef(ItemQueue* ptr) noexcept;
     ~ItemQueueRef() noexcept;
 
-    bool empty() noexcept;
+    bool empty() const noexcept;
     ItemQueue& get() const noexcept;
 };

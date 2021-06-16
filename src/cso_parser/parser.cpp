@@ -1,33 +1,32 @@
+#include <WString.h>
 #include "cso_parser/parser.h"
 #include "utils/utils_aes.h"
 #include "utils/utils_hmac.h"
 
 std::unique_ptr<IParser> Parser::build() {
-    IParser* obj = new (std::nothrow) Parser();
-    if (obj == nullptr) {
-        throw std::runtime_error("[cso_parser/Parser::build(...)]Not enough memory to create object");
-    }
-    return std::unique_ptr<IParser>(obj);
+    return std::unique_ptr<IParser>(new Parser());
 }
 
 Parser::~Parser() noexcept {}
 
-void Parser::setSecretKey(std::shared_ptr<byte> secretKey) noexcept {
+void Parser::setSecretKey(std::shared_ptr<uint8_t> secretKey) noexcept {
     this->secretKey.swap(secretKey);
 }
 
-std::pair<Error::Code, std::unique_ptr<Cipher>> Parser::parseReceivedMessage(byte* content, uint16_t lenContent) noexcept {
+Result<std::unique_ptr<Cipher>> Parser::parseReceivedMessage(uint8_t* content, uint16_t lenContent) noexcept {
     // Parse message
     Result<std::unique_ptr<Cipher>> msg = Cipher::parseBytes(content, lenContent);
     if (msg.errorCode != Error::Nil) {
-        return std::make_pair(msg.errorCode, std::unique_ptr<Cipher>(nullptr));
+        return msg;
     }
 
     // Solve if message is not encrypted
     if (!msg.data->getIsEncrypted()) {
-        Result<Array<byte>> rawBytes = msg.data->getRawBytes();
+        Result<Array<uint8_t>> rawBytes = msg.data->getRawBytes();
         if (rawBytes.errorCode != Error::Nil) {
-            return std::make_pair(rawBytes.errorCode, std::unique_ptr<Cipher>(nullptr));
+            msg.errorCode = rawBytes.errorCode;
+            msg.data.reset(nullptr);
+            return msg;
         }
 
         if (!UtilsHMAC::validateHMAC(
@@ -36,25 +35,31 @@ std::pair<Error::Code, std::unique_ptr<Cipher>> Parser::parseReceivedMessage(byt
             rawBytes.data.length, 
             msg.data->getSign()
         )) {
-            return std::make_pair(Error::CSOParser_ValidateHMACFailed, std::unique_ptr<Cipher>(nullptr));
+            msg.errorCode = Error::CSOParser_ValidateHMACFailed;
+            msg.data.reset(nullptr);
+            return msg;
         }
-        return std::make_pair(Error::Nil, std::move(msg.data));
+        return msg;
     }
 
     // Build aad
-    Result<Array<byte>> aad = msg.data->getAad();
+    Result<Array<uint8_t>> aad = msg.data->getAad();
     if (aad.errorCode != Error::Nil) {
-        return std::make_pair(aad.errorCode, std::unique_ptr<Cipher>(nullptr));
+        msg.errorCode = aad.errorCode;
+        msg.data.reset(nullptr);
+        return msg;
     }
 
     // Decypts message
-    Array<byte> encryptData;
+    Array<uint8_t> encryptData;
     encryptData.length = msg.data->getSizeData();
-    encryptData.buffer.reset(new (std::nothrow) byte[encryptData.length]);
+    encryptData.buffer.reset(new (std::nothrow) uint8_t[encryptData.length]);
     if (encryptData.buffer == nullptr) {
-        return std::make_pair(Error::NotEnoughMemory, std::unique_ptr<Cipher>(nullptr));
+        msg.errorCode = Error::NotEnoughMemory;
+        msg.data.reset(nullptr);
+        return msg;
     }
-    Error::Code error = UtilsAES::decrypt(
+    Error::Code errorCode = UtilsAES::decrypt(
         this->secretKey.get(), 
         msg.data->getData(), 
         msg.data->getSizeData(), 
@@ -64,18 +69,20 @@ std::pair<Error::Code, std::unique_ptr<Cipher>> Parser::parseReceivedMessage(byt
         msg.data->getAuthenTag(),
         encryptData.buffer.get()
     );
-    if (error != Error::Nil) {
-        return std::make_pair(error, std::unique_ptr<Cipher>(nullptr));
+    if (errorCode != Error::Nil) {
+        msg.errorCode = errorCode;
+        msg.data.reset(nullptr);
+        return msg;
     }
     msg.data->setData(encryptData.buffer.release(), encryptData.length);
     msg.data->setIsEncrypted(false);
-    return std::make_pair(Error::Nil, std::move(msg.data));
+    return msg;
 }
 
-std::pair<Error::Code, Array<byte>> Parser::buildActiveMessage(uint16_t ticketID, byte* ticketBytes, uint16_t lenTicket) noexcept {
+Result<Array<uint8_t>> Parser::buildActiveMessage(uint16_t ticketID, uint8_t* ticketBytes, uint16_t lenTicket) noexcept {
     String name(ticketID);
     // Build aad
-    Result<Array<byte>> aad = Cipher::buildAad(
+    Result<Array<uint8_t>> aad = Cipher::buildAad(
         0, 
         0, 
         MessageType::Activation, 
@@ -87,28 +94,28 @@ std::pair<Error::Code, Array<byte>> Parser::buildActiveMessage(uint16_t ticketID
         name.length()
     );
     if (aad.errorCode != Error::Nil) {
-        return std::make_pair(aad.errorCode, Array<byte>());
+        return aad;
     }
 
     // Encrypt ticket
-    std::unique_ptr<byte> iv(new (std::nothrow) byte[LENGTH_IV]);
+    std::unique_ptr<uint8_t> iv(new (std::nothrow) uint8_t[LENGTH_IV]);
     if (iv == nullptr) {
-        return std::make_pair(Error::NotEnoughMemory, Array<byte>());
+        return Result<Array<uint8_t>>(Error::NotEnoughMemory, Array<uint8_t>());
     }
 
-    Array<byte> msg;
+    Array<uint8_t> msg;
     msg.length = lenTicket;
-    msg.buffer.reset(new (std::nothrow) byte[lenTicket]);
+    msg.buffer.reset(new (std::nothrow) uint8_t[lenTicket]);
     if (msg.buffer == nullptr) {
-        return std::make_pair(Error::NotEnoughMemory, Array<byte>());
+        return Result<Array<uint8_t>>(Error::NotEnoughMemory, Array<uint8_t>());
     }
 
-    std::unique_ptr<byte> authenTag(new (std::nothrow) byte[LENGTH_AUTHEN_TAG]);
+    std::unique_ptr<uint8_t> authenTag(new (std::nothrow) uint8_t[LENGTH_AUTHEN_TAG]);
     if (authenTag == nullptr) {
-        return std::make_pair(Error::NotEnoughMemory, Array<byte>());
+        return Result<Array<uint8_t>>(Error::NotEnoughMemory, Array<uint8_t>());
     }
 
-    Error::Code error = UtilsAES::encrypt(
+    Error::Code errorCode = UtilsAES::encrypt(
         this->secretKey.get(), 
         ticketBytes, 
         lenTicket, 
@@ -118,12 +125,12 @@ std::pair<Error::Code, Array<byte>> Parser::buildActiveMessage(uint16_t ticketID
         authenTag.get(),
         msg.buffer.get()
     );
-    if (error != Error::Nil) {
-        return std::make_pair(error, Array<byte>());
+    if (errorCode != Error::Nil) {
+        return Result<Array<uint8_t>>(errorCode, Array<uint8_t>());
     }
 
     // Build cipher bytes
-    Result<Array<byte>> cipher = Cipher::buildCipherBytes(
+    return Cipher::buildCipherBytes(
         0, 
         0, 
         MessageType::Activation, 
@@ -137,13 +144,9 @@ std::pair<Error::Code, Array<byte>> Parser::buildActiveMessage(uint16_t ticketID
         msg.length,
         authenTag.get()
     );
-    if (cipher.errorCode != Error::Nil) {
-        return std::make_pair(cipher.errorCode, Array<byte>());
-    }
-    return std::make_pair(Error::Nil, cipher.data);
 }
 
-std::pair<Error::Code, Array<byte>> Parser::buildMessage(uint64_t msgID, uint64_t msgTag, const char* recvName, byte* content, uint16_t lenContent, bool encrypted, bool cache, bool first, bool last, bool request) noexcept {
+Result<Array<uint8_t>> Parser::buildMessage(uint64_t msgID, uint64_t msgTag, const char* recvName, uint8_t* content, uint16_t lenContent, bool encrypted, bool cache, bool first, bool last, bool request) noexcept {
     return createMessage(
         msgID, 
         msgTag, 
@@ -159,7 +162,7 @@ std::pair<Error::Code, Array<byte>> Parser::buildMessage(uint64_t msgID, uint64_
     );
 }
 
-std::pair<Error::Code, Array<byte>> Parser::buildGroupMessage(uint64_t msgID, uint64_t msgTag, const char* groupName, byte* content, uint16_t lenContent, bool encrypted, bool cache, bool first, bool last, bool request) noexcept {
+Result<Array<uint8_t>> Parser::buildGroupMessage(uint64_t msgID, uint64_t msgTag, const char* groupName, uint8_t* content, uint16_t lenContent, bool encrypted, bool cache, bool first, bool last, bool request) noexcept {
     return createMessage(
         msgID, 
         msgTag, 
@@ -188,10 +191,10 @@ MessageType Parser::getMessagetype(bool isGroup, bool isCached) noexcept {
     return MessageType::Single;
 }
 
-std::pair<Error::Code, Array<byte>> Parser::createMessage(uint64_t msgID, uint64_t msgTag,bool isGroup,const char* name,byte* content,uint16_t lenContent,bool encrypted,bool cache,bool first,bool last,bool request) noexcept {
+Result<Array<uint8_t>> Parser::createMessage(uint64_t msgID, uint64_t msgTag, bool isGroup, const char* name, uint8_t* content, uint16_t lenContent, bool encrypted, bool cache, bool first, bool last, bool request) noexcept {
     MessageType msgType = getMessagetype(isGroup, cache);
     if (!encrypted) {
-        Result<Array<byte>> rawBytes = Cipher::buildRawBytes(
+        Result<Array<uint8_t>> rawBytes = Cipher::buildRawBytes(
             msgID, 
             msgTag, 
             msgType, 
@@ -205,25 +208,25 @@ std::pair<Error::Code, Array<byte>> Parser::createMessage(uint64_t msgID, uint64
             lenContent
         );
         if (rawBytes.errorCode != Error::Nil) {
-            return std::make_pair(rawBytes.errorCode, Array<byte>());
+            return rawBytes;
         }
 
-        std::unique_ptr<byte> sign(new (std::nothrow) byte[LENGTH_SIGN_HMAC]);
+        std::unique_ptr<uint8_t> sign(new (std::nothrow) uint8_t[LENGTH_SIGN_HMAC]);
         if (sign == nullptr) {
-            return std::make_pair(Error::NotEnoughMemory, Array<byte>());
+            return Result<Array<uint8_t>>(Error::NotEnoughMemory, Array<uint8_t>());
         }
         
-        Error::Code error = UtilsHMAC::calcHMAC(
+        Error::Code errorCode = UtilsHMAC::calcHMAC(
             this->secretKey.get(), 
             rawBytes.data.buffer.get(), 
             rawBytes.data.length, 
             sign.get()
         );
-        if (error != Error::Nil) {
-            std::make_pair(error, Array<byte>());
+        if (errorCode != Error::Nil) {
+            return Result<Array<uint8_t>>(errorCode, Array<uint8_t>());
         }
 
-        Result<Array<byte>> noCipher = Cipher::buildNoCipherBytes(
+        return Cipher::buildNoCipherBytes(
             msgID, 
             msgTag, 
             msgType, 
@@ -236,14 +239,10 @@ std::pair<Error::Code, Array<byte>> Parser::createMessage(uint64_t msgID, uint64
             lenContent,
             sign.get()
         );
-        if (noCipher.errorCode != Error::Nil) {
-            return std::make_pair(noCipher.errorCode, Array<byte>());
-        }
-        return std::make_pair(Error::Nil, noCipher.data);
     }
 
     // Build aad
-    Result<Array<byte>> aad = Cipher::buildAad(
+    Result<Array<uint8_t>> aad = Cipher::buildAad(
         msgID, 
         msgTag, 
         msgType, 
@@ -255,28 +254,28 @@ std::pair<Error::Code, Array<byte>> Parser::createMessage(uint64_t msgID, uint64
         strlen(name)
     );
     if (aad.errorCode != Error::Nil) {
-        return std::make_pair(aad.errorCode, Array<byte>());
+        return aad;
     }
 
     // Encrypt content
-    std::unique_ptr<byte> iv(new (std::nothrow) byte[LENGTH_IV]);
+    std::unique_ptr<uint8_t> iv(new (std::nothrow) uint8_t[LENGTH_IV]);
     if (iv == nullptr) {
-        return std::make_pair(Error::NotEnoughMemory, Array<byte>());
+        return Result<Array<uint8_t>>(Error::NotEnoughMemory, Array<uint8_t>());
     }
 
-    Array<byte> msg;
+    Array<uint8_t> msg;
     msg.length = lenContent;
-    msg.buffer.reset(new (std::nothrow) byte[msg.length]);
+    msg.buffer.reset(new (std::nothrow) uint8_t[msg.length]);
     if (msg.buffer == nullptr) {
-        return std::make_pair(Error::NotEnoughMemory, Array<byte>());
+        return Result<Array<uint8_t>>(Error::NotEnoughMemory, Array<uint8_t>());
     }
 
-    std::unique_ptr<byte> authenTag(new (std::nothrow) byte[LENGTH_AUTHEN_TAG]);
+    std::unique_ptr<uint8_t> authenTag(new (std::nothrow) uint8_t[LENGTH_AUTHEN_TAG]);
     if (authenTag == nullptr) {
-        return std::make_pair(Error::NotEnoughMemory, Array<byte>());
+        return Result<Array<uint8_t>>(Error::NotEnoughMemory, Array<uint8_t>());
     }
 
-    Error::Code error = UtilsAES::encrypt(
+    Error::Code errorCode = UtilsAES::encrypt(
         this->secretKey.get(), 
         content, 
         lenContent, 
@@ -286,12 +285,12 @@ std::pair<Error::Code, Array<byte>> Parser::createMessage(uint64_t msgID, uint64
         authenTag.get(),
         msg.buffer.get()
     );
-    if (error != Error::Nil) {
-        return std::make_pair(error, Array<byte>());
+    if (errorCode != Error::Nil) {
+        return Result<Array<uint8_t>>(errorCode, Array<uint8_t>());
     }
 
     // Build cipher bytes
-    Result<Array<byte>> cipher = Cipher::buildCipherBytes(
+    return Cipher::buildCipherBytes(
         msgID, 
         msgTag, 
         msgType, 
@@ -305,8 +304,4 @@ std::pair<Error::Code, Array<byte>> Parser::createMessage(uint64_t msgID, uint64
         msg.length,
         authenTag.get()
     );
-    if (cipher.errorCode != Error::Nil) {
-        return std::make_pair(cipher.errorCode, Array<byte>());
-    }
-    return std::make_pair(Error::Nil, cipher.data);
 }

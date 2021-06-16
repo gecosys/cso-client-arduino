@@ -4,10 +4,9 @@
 #include <atomic>
 #include <memory>
 #include <cstdint>
-#include <cstring>
-#include <utility>
 #include <type_traits>
 #include "spin_lock.h"
+#include "utils/result.h"
 #include "error/error_code.h"
 
 // "ConcurrencyQueue" is general class for any type.
@@ -54,11 +53,11 @@ public:
           index_read(0), 
           index_write(0) {
         if (this->capacity <= 0) {
-            throw std::runtime_error("[utils_concurrency_queue/ConcurrencyQueue(...)]Capacity has to be larger than 0");
+            throw "[syncchronization/ConcurrencyQueue(uint32_t capacity)]Capacity has to be larger than 0";
         }
         this->buffer = new (std::nothrow) storage[this->capacity];
         if (this->buffer == nullptr) {
-            throw std::runtime_error("[utils_concurrency_queue/ConcurrencyQueue(...)]Not enough memory to create array");
+            throw "[syncchronization/ConcurrencyQueue(uint32_t capacity)]Not enough memory to create array";
         }
     }
 
@@ -76,36 +75,38 @@ public:
     }
 
     // This function will be called if "ValueType" has move constructor
-    template <typename std::enable_if<std::is_nothrow_move_constructible<ValueType>::value>::type* = nullptr>
-    Error::Code push(ValueType&& value) {
+    template <typename T = ValueType,
+              typename std::enable_if<std::is_nothrow_move_constructible<T>::value>::type* = nullptr>
+    Error::Code push(T&& value) {
         uint32_t index;
         if (!syncPush(index)) {
-            return Error::Utils_ConcurrencyQueue_Full;
+            return Error::Synchronization_ConcurrencyQueue_Full;
         }
         // "std::addressof" prevents user wrong implementation "operator &"
         // User can return address of some fields of object, not object's address
-        new (static_cast<void*>(std::addressof(this->buffer[index])))ValueType(std::move(value));
+        new (static_cast<void*>(std::addressof(this->buffer[index])))T(std::move(value));
         return Error::Nil;
     }
 
     // This function will be called if "ValueType" has copy constructor
-    template <typename std::enable_if<std::is_nothrow_copy_constructible<ValueType>::value>::type* = nullptr>
-    Error::Code push(ValueType& value) {
+    template <typename T = ValueType, 
+              typename std::enable_if<std::is_nothrow_copy_constructible<T>::value>::type* = nullptr>
+    Error::Code push(T& value) {
         uint32_t index;
         if (!syncPush(index)) {
-            return Error::Utils_ConcurrencyQueue_Full;
+            return Error::Synchronization_ConcurrencyQueue_Full;
         }
         // "std::addressof" prevents user wrong implementation "operator &"
         // User can return address of some fields of object, not object's address
-        new (static_cast<void*>(std::addressof(this->buffer[index])))ValueType(value);
+        new (static_cast<void*>(std::addressof(this->buffer[index])))T(value);
         return Error::Nil;
     }
 
-    std::pair<Error::Code, ValueType> pop() {
-        std::pair<Error::Code, ValueType> ret(Error::Nil, ValueType());
+    Result<ValueType> pop() {
+        Result<ValueType> ret(Error::Nil, ValueType());
         // Check empty
         if (this->size.load() == 0) {
-            ret.first = Error::Utils_ConcurrencyQueue_Empty;
+            ret.errorCode = Error::Synchronization_ConcurrencyQueue_Empty;
             return ret;
         }
         this->size.fetch_sub(1);
@@ -120,7 +121,7 @@ public:
         ValueType* ptr = reinterpret_cast<ValueType*>(std::addressof(this->buffer[index]));
         // Use "std::swap" completely transfer ownership of the memory to the user
         // if "ValueType" is "std::share_ptr" or struct containing "std :: share_ptr" fields
-        std::swap(ret.second, *ptr);
+        std::swap(ret.data, *ptr);
         return ret;
     }
 };

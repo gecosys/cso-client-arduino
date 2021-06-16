@@ -2,7 +2,7 @@
 #define _MESSAGE_READYTICKET_H_
 
 #include <cstdint>
-#include "message/result.h"
+#include "utils/result.h"
 
 class ReadyTicket {
 private:

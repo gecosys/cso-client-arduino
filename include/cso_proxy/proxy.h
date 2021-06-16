@@ -20,9 +20,9 @@ public:
 private:
     Proxy(std::shared_ptr<IConfig>& config);
 
-    std::pair<Error::Code, std::string> sendPOST(const char* url, byte* buffer, uint16_t length);
+    Result<std::string> sendPOST(const char* url, uint8_t* buffer, uint16_t length);
     Error::Code verifyDHKeys(const char* gKey, const char* nKey, const char* pubKey, const char* encodeSign);
-    Error::Code buildEncyptToken(const char* clientPubKey, const std::unique_ptr<byte>& secretKey, std::unique_ptr<byte>& iv, std::unique_ptr<byte>& authenTag, Array<byte>& token);
+    Error::Code buildEncyptToken(const char* clientPubKey, const std::unique_ptr<uint8_t>& secretKey, std::unique_ptr<uint8_t>& iv, std::unique_ptr<uint8_t>& authenTag, Array<uint8_t>& token);
 
 public:
     Proxy() = delete;
@@ -32,8 +32,8 @@ public:
 
     ~Proxy() noexcept;
 
-    std::pair<Error::Code, ServerKey> exchangeKey();
-    std::pair<Error::Code, ServerTicket> registerConnection(const ServerKey& serverKey);
+    Result<ServerKey> exchangeKey();
+    Result<ServerTicket> registerConnection(const ServerKey& serverKey);
 };
 
 #endif //_CSO_PROXY_H_

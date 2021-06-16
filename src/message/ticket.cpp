@@ -17,7 +17,7 @@ Result<Ticket*> Ticket::parseBytes(uint8_t* buffer, uint8_t sizeBuffer) noexcept
         result.errorCode = Error::Message_InvalidBytes;
         return result;
     }
-    Ticket* ticket = new (std::nothrow) Ticket();
+    Ticket* ticket = new Ticket();
     if (ticket == nullptr) {
         result.errorCode = Error::NotEnoughMemory;
         return result;

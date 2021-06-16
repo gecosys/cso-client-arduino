@@ -1,3 +1,4 @@
+// #include <lwip/sockets.h>
 #include <new>
 #include "cso_connection/connection.h"
 
@@ -5,11 +6,7 @@
 #define BUFFER_SIZE 1024
 
 std::unique_ptr<IConnection> Connection::build(uint16_t queueSize) {
-    IConnection* obj = new (std::nothrow) Connection(queueSize);
-    if (obj == nullptr) {
-        throw std::runtime_error("[cso_connection/Connection::build(...)]Not enough memory to create object");
-    }
-    return std::unique_ptr<IConnection>(obj);
+    return std::unique_ptr<IConnection>(new Connection(queueSize));
 }
 
 Connection::Connection(uint16_t queueSize) 
@@ -40,19 +37,22 @@ Error::Code Connection::connect(const char* host, uint16_t port) {
 }
 
 Error::Code Connection::loopListen() {
-    std::unique_ptr<byte> buffer(new (std::nothrow) byte[BUFFER_SIZE]);
+    std::unique_ptr<uint8_t> buffer(new (std::nothrow) uint8_t[BUFFER_SIZE]);
     if (buffer == nullptr) {
         return Error::NotEnoughMemory;
     }
 
     bool header = true;
-    byte* message = nullptr;
+    // bool disconnected = true;
+    uint8_t* message = nullptr;
     uint16_t seek = 0;
     uint16_t readed = 0;
     uint16_t length = HEADER_SIZE;
 
     while (WiFi.status() == WL_CONNECTED && this->status.load() == Status::Connected) {
         if (this->client.available() <= 0) {
+            // disconnected = false;
+            // break;
             vTaskDelay(50 / portTICK_PERIOD_MS);
             continue;
         }
@@ -60,6 +60,8 @@ Error::Code Connection::loopListen() {
         // "readed" always is <= "length - seek"
         readed = this->client.readBytes(buffer.get() + seek, length - seek);
         if (readed <= 0) {
+            // disconnected = false;
+            // break;
             vTaskDelay(50 / portTICK_PERIOD_MS);
             continue;
         }
@@ -81,7 +83,7 @@ Error::Code Connection::loopListen() {
         }
 
         // Build "message"
-        message = new (std::nothrow) byte[length];
+        message = new (std::nothrow) uint8_t[length];
         if (message == nullptr) {
             return Error::NotEnoughMemory;
         }
@@ -89,8 +91,10 @@ Error::Code Connection::loopListen() {
         // Push message
         // Don't delete "message" because queue will manage memory
         memcpy(message, buffer.get(), length);
-        this->nextMessage.push(Array<byte>(message, length));
+        this->nextMessage.push(Array<uint8_t>(message, length));
 
+        // disconnected = false;
+        // break;
         // Reset
         length = HEADER_SIZE;
         header = true;
@@ -99,9 +103,15 @@ Error::Code Connection::loopListen() {
     this->client.stop();
     this->status.store(Status::Disconnected);
     return Error::CSOConnection_Disconnected;
+    // if (disconnected) {
+    //     this->client.stop();        
+    //     this->status = Status::Disconnected;
+    //     return Error::CSOConnection_Disconnected;
+    // }
+    // return Error::Nil;
 }
 
-Error::Code Connection::sendMessage(byte* data, uint16_t nBytes) {
+Error::Code Connection::sendMessage(uint8_t* data, uint16_t nBytes) {
     if (WiFi.status() != WL_CONNECTED || this->status.load() != Status::Connected) {
         this->status = Status::Disconnected;
         return Error::CSOConnection_Disconnected;
@@ -110,7 +120,7 @@ Error::Code Connection::sendMessage(byte* data, uint16_t nBytes) {
     //============
     // Make buffer
     //============
-    std::unique_ptr<byte> buffer(new (std::nothrow) byte[nBytes + HEADER_SIZE]); // Add 2 bytes "data length"
+    std::unique_ptr<uint8_t> buffer(new (std::nothrow) uint8_t[nBytes + HEADER_SIZE]); // Add 2 bytes "data length"
     if (buffer == nullptr) {
         return Error::NotEnoughMemory;
     }
@@ -132,8 +142,8 @@ Error::Code Connection::sendMessage(byte* data, uint16_t nBytes) {
     return Error::Nil;
 }
 
-Array<byte> Connection::getMessage() {
-    return this->nextMessage.pop().second;
+Array<uint8_t> Connection::getMessage() {
+    return this->nextMessage.pop().data;
 }
 
 bool Connection::setup() noexcept {

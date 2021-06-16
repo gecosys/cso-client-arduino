@@ -14,7 +14,7 @@ Error::Code UtilsRSA::verifySignature(const uint8_t* publicKey, const uint8_t* s
     size_t usedLen;
     mbedtls_pem_context pemCtx;
     mbedtls_pem_init(&pemCtx);
-    int32_t error = mbedtls_pem_read_buffer(
+    auto errorCode = mbedtls_pem_read_buffer(
         &pemCtx,
         "-----BEGIN PUBLIC KEY-----",
         "-----END PUBLIC KEY-----",
@@ -23,23 +23,23 @@ Error::Code UtilsRSA::verifySignature(const uint8_t* publicKey, const uint8_t* s
         0,
         &usedLen
     );
-    if (error != 0) {
+    if (errorCode != 0) {
         mbedtls_pem_free(&pemCtx);
-        return Error::adaptExternalCode(ExtTag::MbedTLS, error);
+        return Error::adaptExternalCode(Location::Utils_RSA, ExternalTag::MbedTLS, errorCode);
     }
 
     // Parse public key
     mbedtls_pk_context pkCtx;
     mbedtls_pk_init(&pkCtx);
-    error = mbedtls_pk_parse_public_key(&pkCtx, pemCtx.buf, pemCtx.buflen);
-    if (error != 0) {
+    errorCode = mbedtls_pk_parse_public_key(&pkCtx, pemCtx.buf, pemCtx.buflen);
+    if (errorCode != 0) {
         mbedtls_pem_free(&pemCtx);
         mbedtls_pk_free(&pkCtx);
-        return Error::adaptExternalCode(ExtTag::MbedTLS, error);
+        return Error::adaptExternalCode(Location::Utils_RSA, ExternalTag::MbedTLS, errorCode);
     }
 
     // Verify hashed data with signature
-    error = mbedtls_pk_verify(
+    errorCode = mbedtls_pk_verify(
         &pkCtx,
         MBEDTLS_MD_SHA256,
         hashed,
@@ -49,8 +49,8 @@ Error::Code UtilsRSA::verifySignature(const uint8_t* publicKey, const uint8_t* s
     );
     mbedtls_pem_free(&pemCtx);
     mbedtls_pk_free(&pkCtx);
-    if (error != 0) {
-        return Error::adaptExternalCode(ExtTag::MbedTLS, error);
+    if (errorCode != 0) {
+        return Error::adaptExternalCode(Location::Utils_RSA, ExternalTag::MbedTLS, errorCode);
     }    
     return Error::Nil;
 }

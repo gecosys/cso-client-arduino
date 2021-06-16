@@ -4,11 +4,7 @@
 #define NUMBER_BITS 32
 
 std::unique_ptr<ICounter> Counter::build(uint64_t writeIndex, uint64_t minReadIndex, uint32_t maskReadBits) {
-    ICounter* obj = new (std::nothrow) Counter(writeIndex - 1, minReadIndex, maskReadBits);
-    if (obj == nullptr) {
-        throw std::runtime_error("[cso_counter/Counter::build(...)]Not enough memory to create object");
-    }
-    return std::unique_ptr<ICounter>(obj);
+    return std::unique_ptr<ICounter>(new Counter(writeIndex - 1, minReadIndex, maskReadBits));
 }
 
 Counter::Counter(uint64_t writeIndex, uint64_t minReadIndex, uint32_t maskReadBits) noexcept

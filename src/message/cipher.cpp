@@ -4,9 +4,42 @@
 
 #define MAX_CONNECTION_NAME_LENGTH 36
 
-Cipher::Cipher() noexcept {
-    this->name = nullptr;
-    this->data = nullptr;
+Cipher::Cipher() noexcept
+ : msgID(-1),
+   msgTag(-1),
+   isFirst(false),
+   isLast(false),
+   isRequest(false),
+   isEncrypted(false),
+   iv(),
+   sign(),
+   authenTag(),
+   sizeData(0),
+   data(nullptr),
+   lenName(0),
+   name(nullptr),
+   msgType() {}
+
+Cipher::Cipher(Cipher&& other) noexcept
+ : msgID(other.msgID),
+   msgTag(other.msgTag),
+   isFirst(other.isFirst),
+   isLast(other.isLast),
+   isRequest(other.isRequest),
+   isEncrypted(other.isEncrypted),
+   iv(),
+   sign(),
+   authenTag(),
+   sizeData(other.sizeData),
+   data(nullptr),
+   lenName(other.lenName),
+   name(nullptr),
+   msgType(other.msgType) {
+    memcpy(this->iv, other.iv, LENGTH_IV);
+    memcpy(this->sign, other.sign, LENGTH_SIGN_HMAC);
+    memcpy(this->authenTag, other.authenTag, LENGTH_AUTHEN_TAG);
+    std::swap(this->data, other.data);
+    std::swap(this->name, other.name);
 }
 
 Cipher::~Cipher() noexcept {
@@ -16,6 +49,24 @@ Cipher::~Cipher() noexcept {
     if (this->data != nullptr) {
         delete []this->data;
     }
+}
+
+Cipher& Cipher::operator=(Cipher&& other) noexcept {
+    this->msgID = other.msgID;
+    this->msgTag = other.msgTag;
+    this->isFirst = other.isFirst;
+    this->isLast = other.isLast;
+    this->isRequest = other.isRequest;
+    this->isEncrypted = other.isEncrypted;
+    this->sizeData = other.sizeData;
+    this->lenName = other.lenName;
+    this->msgType = other.msgType;
+    memcpy(this->iv, other.iv, LENGTH_IV);
+    memcpy(this->sign, other.sign, LENGTH_SIGN_HMAC);
+    memcpy(this->authenTag, other.authenTag, LENGTH_AUTHEN_TAG);
+    std::swap(this->data, other.data);
+    std::swap(this->name, other.name);
+    return *this;
 }
 
 void Cipher::setMsgID(uint64_t msgID) noexcept {
@@ -294,7 +345,7 @@ Result<std::unique_ptr<Cipher>> Cipher::parseBytes(uint8_t* buffer, uint16_t siz
 		memcpy(data, buffer + posData, sizeData);
 	}
 
-    Cipher* cipher = new (std::nothrow) Cipher();
+    Cipher* cipher = new Cipher();
     if (cipher == nullptr) {
         result.errorCode = Error::NotEnoughMemory;
         return result;

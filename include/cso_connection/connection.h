@@ -9,7 +9,7 @@
 
 class Connection : public IConnection {
 private:
-    ConcurrencyQueue<Array<byte>> nextMessage;
+    ConcurrencyQueue<Array<uint8_t>> nextMessage;
     std::atomic<uint8_t> status;
     WiFiClient client;
 
@@ -31,8 +31,8 @@ public:
 
     Error::Code connect(const char* host, uint16_t port);
     Error::Code loopListen();
-    Error::Code sendMessage(byte* data, uint16_t nBytes);
-    Array<byte> getMessage();
+    Error::Code sendMessage(uint8_t* data, uint16_t nBytes);
+    Array<uint8_t> getMessage();
 };
 
 #endif //_CSO_CONNECTION_H_

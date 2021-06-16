@@ -2,11 +2,7 @@
 #include "cso_queue/queue.h"
 
 std::unique_ptr<IQueue> Queue::build(uint32_t capacity) {
-    IQueue* obj = new (std::nothrow) Queue(capacity);
-    if (obj == nullptr) {
-        throw std::runtime_error("[cso_queue/Queue::build(...)]Not enough memory to create object");
-    }
-    return std::unique_ptr<IQueue>(obj);
+    return std::unique_ptr<IQueue>(new Queue(capacity));
 }
 
 Queue::Queue(uint32_t cap) 
@@ -14,7 +10,7 @@ Queue::Queue(uint32_t cap)
       length(0) {
     this->items = new (std::nothrow) std::unique_ptr<ItemQueue>[this->capacity];
     if (this->items == nullptr) {
-        throw std::runtime_error("[cso_queue/Queue(...)]Not enough memory to create array");
+        throw "[cso_queue/Queue(uint32_t cap)]Not enough memory to create array";
     }
 }
 

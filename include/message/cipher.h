@@ -4,9 +4,9 @@
 #include <memory>
 #include <cstdint>
 #include "utils/array.h"
+#include "utils/result.h"
 #include "message/type.h"
 #include "message/define.h"
-#include "message/result.h"
 
 class Cipher {
 private:
@@ -29,7 +29,12 @@ private:
 
 public:
     Cipher() noexcept;
+    Cipher(Cipher&& other) noexcept;
+    Cipher(const Cipher& other) = delete;
     ~Cipher() noexcept;
+
+    Cipher& operator=(const Cipher& other) = delete;
+    Cipher& operator=(Cipher&& other) noexcept;
 
     void setMsgID(uint64_t msgID) noexcept;
     void setMsgTag(uint64_t msgTag) noexcept;
@@ -56,7 +61,7 @@ public:
     uint8_t* getAuthenTag() noexcept;
     char* getName() noexcept;
     uint8_t getLengthName() noexcept;
-    uint8_t* getData() noexcept; // Referent to properties
+    uint8_t* getData() noexcept;
     uint16_t getSizeData() noexcept;
 
     Result<Array<uint8_t>> intoBytes() noexcept;

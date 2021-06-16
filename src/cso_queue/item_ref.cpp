@@ -5,7 +5,7 @@ ItemQueueRef::ItemQueueRef(ItemQueue* ptr) noexcept
 
 ItemQueueRef::~ItemQueueRef() noexcept {}
 
-bool ItemQueueRef::empty() noexcept {
+bool ItemQueueRef::empty() const noexcept {
     return this->ptr == nullptr;
 }
 

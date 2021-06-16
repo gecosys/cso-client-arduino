@@ -10,11 +10,7 @@
 #include "utils/utils_base64.h"
 
 std::unique_ptr<IProxy> Proxy::build(std::shared_ptr<IConfig> config) {
-    IProxy* obj = new (std::nothrow) Proxy(config);
-    if (obj == nullptr) {        
-        throw std::runtime_error("[cso_proxy/Proxy::build(std::shared_ptr<IConfig>)]Not enough memory to create object");
-    }
-    return std::unique_ptr<IProxy>(obj);
+    return std::unique_ptr<IProxy>(new Proxy(config));
 }
 
 Proxy::Proxy(std::shared_ptr<IConfig>& config) {
@@ -23,7 +19,7 @@ Proxy::Proxy(std::shared_ptr<IConfig>& config) {
 
 Proxy::~Proxy() {}
 
-std::pair<Error::Code, ServerKey> Proxy::exchangeKey() {
+Result<ServerKey> Proxy::exchangeKey() {
     // "obj" is a reference to "doc".
     // "deserializeJson" from HTTP response to "doc" copied strings, 
     // if put "doc" and "data" into block and extract neccessary fields into variables,
@@ -34,7 +30,7 @@ std::pair<Error::Code, ServerKey> Proxy::exchangeKey() {
     JsonObject obj_json;
     {
         // Build http request body
-        Array<byte> httpBody;
+        Array<uint8_t> httpBody;
         {
             StaticJsonDocument<JSON_OBJECT_SIZE(2)> doc;
             obj_json = doc.to<JsonObject>();
@@ -44,9 +40,9 @@ std::pair<Error::Code, ServerKey> Proxy::exchangeKey() {
             httpBody.length = 34 + 
                               this->config->getProjectID().length() + 
                               this->config->getConnectionName().length();
-            httpBody.buffer.reset(new (std::nothrow) byte[httpBody.length + 1]);
+            httpBody.buffer.reset(new (std::nothrow) uint8_t[httpBody.length + 1]);
             if (httpBody.buffer == nullptr) {
-                return std::make_pair(Error::NotEnoughMemory, ServerKey());
+                return make_result(Error::NotEnoughMemory, ServerKey());
             }
             serializeJson(doc, httpBody.buffer.get(), httpBody.length + 1);
         }
@@ -54,17 +50,17 @@ std::pair<Error::Code, ServerKey> Proxy::exchangeKey() {
         // Build URL
         std::unique_ptr<char> url(new (std::nothrow) char[this->config->getCSOAddress().length() + 14]);
         if (url == nullptr) {
-            return std::make_pair(Error::NotEnoughMemory, ServerKey());
+            return make_result(Error::NotEnoughMemory, ServerKey());
         }
         sprintf(url.get(), "%s/exchange-key", this->config->getCSOAddress().c_str());
 
         // Send request and receive response
-        std::pair<Error::Code, std::string> resp = sendPOST(url.get(), httpBody.buffer.get(), httpBody.length);
-        if (resp.first != Error::Nil) {
-            return std::make_pair(resp.first, ServerKey());
+        Result<std::string> resp = sendPOST(url.get(), httpBody.buffer.get(), httpBody.length);
+        if (resp.errorCode != Error::Nil) {
+            return make_result(resp.errorCode, ServerKey());
         }
-        if (resp.second.empty()) {
-            return std::make_pair(Error::CSOProxy_ResponseEmpty, ServerKey());
+        if (resp.data.empty()) {
+            return make_result(Error::CSOProxy_ResponseEmpty, ServerKey());
         }
 
         // "DynamicJsonDocument" is allocated on heap, so we need to free unsued memory
@@ -74,18 +70,18 @@ std::pair<Error::Code, ServerKey> Proxy::exchangeKey() {
 
         // Parse response
         // JSON string has 7 keys <=> 7 JSON_OBJECT
-        doc = DynamicJsonDocument(JSON_OBJECT_SIZE(7) + resp.second.length());
-        auto jsonError = deserializeJson(doc, resp.second);
+        doc = DynamicJsonDocument(JSON_OBJECT_SIZE(7) + resp.data.length());
+        auto jsonError = deserializeJson(doc, resp.data);
         if (jsonError) {
-            return std::make_pair(
-                Error::adaptExternalCode(ExtTag::ArduinoJSON, jsonError.code()), 
+            return make_result(
+                Error::adaptExternalCode(Location::CSO_Proxy, ExternalTag::ArduinoJSON, jsonError.code()), 
                 ServerKey()
             );
         }
         auto serverErrorCode = (int32_t)doc["returncode"];
         if (serverErrorCode != 1) {
-            return std::make_pair(
-                Error::adaptExternalCode(ExtTag::Server, serverErrorCode), 
+            return make_result(
+                Error::adaptExternalCode(Location::CSO_Proxy, ExternalTag::Server, serverErrorCode), 
                 ServerKey()
             );
         }
@@ -102,43 +98,84 @@ std::pair<Error::Code, ServerKey> Proxy::exchangeKey() {
         obj_json["sign"]
     );
     if (errorCode != Error::Nil) {
-        return std::make_pair(errorCode, ServerKey());
+        return make_result(errorCode, ServerKey());
     }
-    return std::make_pair(
+
+    BigNum gKey;
+    errorCode = gKey.setString(obj_json["g_key"]);
+    if (errorCode != Error::Nil) {
+        return make_result(errorCode, ServerKey());
+    }
+
+    BigNum nKey;
+    errorCode = nKey.setString(obj_json["n_key"]);
+    if (errorCode != Error::Nil) {
+        return make_result(errorCode, ServerKey());
+    }
+
+    BigNum pubKey;
+    errorCode = pubKey.setString(obj_json["pub_key"]);
+    if (errorCode != Error::Nil) {
+        return make_result(errorCode, ServerKey());
+    }
+
+    return make_result(
         Error::Nil, 
-        ServerKey(
-            obj_json["g_key"], 
-            obj_json["n_key"], 
-            obj_json["pub_key"]
-        )
+        ServerKey(std::move(gKey), std::move(nKey), std::move(pubKey))
     );
 }
 
-std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& serverKey) {
-    // Build client secret key
-    std::unique_ptr<byte> secretKey(new (std::nothrow) byte[32]);
-    if (secretKey == nullptr) {
-        return std::make_pair(Error::NotEnoughMemory, ServerTicket());
+Result<ServerTicket> Proxy::registerConnection(const ServerKey& serverKey) {
+    // Generate client private key
+    BigNum clientPrivKey;
+    {
+        auto result_genPrivKey = UtilsDH::generatePrivateKey();
+        if (result_genPrivKey.errorCode != Error::Nil) {
+            return make_result(result_genPrivKey.errorCode, ServerTicket());
+        }
+        std::swap(clientPrivKey, result_genPrivKey.data);
     }
 
-    BigNum clientPrivKey = UtilsDH::generatePrivateKey();
-    std::string clientPubKey = UtilsDH::calcPublicKey(serverKey.gKey, serverKey.nKey, clientPrivKey).toString();
-    UtilsDH::calcSecretKey(serverKey.nKey, clientPrivKey, serverKey.pubKey, secretKey.get());
+    // Calculate client public key
+    std::string clientPubKey;
+    {
+        auto result_calcPubKey = UtilsDH::calcPublicKey(serverKey.gKey, serverKey.nKey, clientPrivKey);
+        if (result_calcPubKey.errorCode != Error::Nil) {
+            return make_result(result_calcPubKey.errorCode, ServerTicket());
+        }
+        auto result_toString = result_calcPubKey.data.toString();
+        if (result_toString.errorCode != Error::Nil) {
+            return make_result(result_toString.errorCode, ServerTicket());
+        }
+        std::swap(clientPubKey, result_toString.data);
+    }
+
+    // Calculate client secret key
+    std::unique_ptr<byte> secretKey(new (std::nothrow) byte[32]);
+    if (secretKey == nullptr) {
+        return make_result(Error::NotEnoughMemory, ServerTicket());
+    }
+    auto errorCode = UtilsDH::calcSecretKey(serverKey.nKey, clientPrivKey, serverKey.pubKey, secretKey.get());
+    if (errorCode != Error::Nil) {
+        return make_result(errorCode, ServerTicket());
+    }
 
     // Build encrypt token
     Array<byte> token;
     std::unique_ptr<byte> iv(nullptr);
     std::unique_ptr<byte> authenTag(nullptr);
-    auto errorCode = buildEncyptToken(clientPubKey.c_str(), secretKey, iv, authenTag, token);
+    errorCode = buildEncyptToken(clientPubKey.c_str(), secretKey, iv, authenTag, token);
     if (errorCode != Error::Nil) {
-        return std::make_pair(errorCode, ServerTicket());
+        return make_result(errorCode, ServerTicket());
     }
 
     // Invoke API
+    Array<byte> aad;
     uint16_t ticketID;
+    uint16_t hubPort;
+    std::string hubIP;
+    BigNum serverPubKey;
     uint16_t lenServerTicketToken;
-    std::string hubAddress;
-    std::string serverPubKey;
     std::unique_ptr<byte> serverTicketToken(nullptr);
     {
         // Build http request body
@@ -166,7 +203,7 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
                               this->config->getConnectionName().length();
             httpBody.buffer.reset(new (std::nothrow) byte[httpBody.length + 1]);
             if (httpBody.buffer == nullptr) {
-                return std::make_pair(Error::NotEnoughMemory, ServerTicket());
+                return make_result(Error::NotEnoughMemory, ServerTicket());
             }
             serializeJson(doc, httpBody.buffer.get(), httpBody.length + 1);
         }
@@ -176,17 +213,17 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
             // Build URL
             std::unique_ptr<char> url(new (std::nothrow) char[this->config->getCSOAddress().length() + 21]);
             if (url.get() == nullptr) {
-                return std::make_pair(Error::NotEnoughMemory, ServerTicket());
+                return make_result(Error::NotEnoughMemory, ServerTicket());
             }
             sprintf(url.get(), "%s/register-connection", this->config->getCSOAddress().c_str());
 
             // Send request and receive response
-            std::pair<Error::Code, std::string> resp = sendPOST(url.get(), httpBody.buffer.get(), httpBody.length);
-            if (resp.first != Error::Nil) {
-                return std::make_pair(resp.first, ServerTicket());
+            Result<std::string> resp = sendPOST(url.get(), httpBody.buffer.get(), httpBody.length);
+            if (resp.errorCode != Error::Nil) {
+                return make_result(resp.errorCode, ServerTicket());
             }
-            if (resp.second.empty()) {
-                return std::make_pair(Error::CSOProxy_ResponseEmpty, ServerTicket());
+            if (resp.data.empty()) {
+                return make_result(Error::CSOProxy_ResponseEmpty, ServerTicket());
             }
 
             // "DynamicJsonDocument" is allocated on heap, so we need to free unsued memory
@@ -195,62 +232,97 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
             delete[] httpBody.buffer.release();
 
             // Parse response
-            doc = DynamicJsonDocument(JSON_OBJECT_SIZE(9) + resp.second.length());
-            auto jsonError = deserializeJson(doc, resp.second);
+            doc = DynamicJsonDocument(JSON_OBJECT_SIZE(9) + resp.data.length());
+            auto jsonError = deserializeJson(doc, resp.data);
             if (jsonError) {
-                return std::make_pair(
-                    Error::adaptExternalCode(ExtTag::ArduinoJSON, jsonError.code()), 
+                return make_result(
+                    Error::adaptExternalCode(Location::CSO_Proxy, ExternalTag::ArduinoJSON, jsonError.code()), 
                     ServerTicket()
                 );
             }
             auto serverErrorCode = (int32_t)doc["returncode"];
             if (serverErrorCode != 1) {
-                return std::make_pair(
-                    Error::adaptExternalCode(ExtTag::Server, serverErrorCode), 
+                return make_result(
+                    Error::adaptExternalCode(Location::CSO_Proxy, ExternalTag::Server, serverErrorCode), 
                     ServerTicket()
                 );
             }
         }
 
-        // Get info
         JsonObject obj_json = doc["data"];
+        const char* serverPublicKey = (const char*)obj_json["pub_key"];
+        const char* hubAddress = (const char*)obj_json["hub_address"];
+        size_t lenHubAddress = strlen(hubAddress);
+
+        // Get ticket_id
         ticketID = (uint16_t)obj_json["ticket_id"];
-        serverPubKey = (const char*)obj_json["pub_key"];
-        hubAddress = (const char*)obj_json["hub_address"];
 
-        const char* encodeData = (const char*)obj_json["ticket_token"];
-        Array<byte> decodeData = UtilsBase64::decode(encodeData);
-        serverTicketToken.reset(new (std::nothrow) byte[decodeData.length]);
-        if (serverTicketToken == nullptr) {
-            return std::make_pair(Error::NotEnoughMemory, ServerTicket());
+        // Decode base64 data
+        {
+            Array<byte> decodeData = UtilsBase64::decode((const char*)obj_json["ticket_token"]);
+            serverTicketToken.reset(new (std::nothrow) byte[decodeData.length]);
+            if (serverTicketToken == nullptr) {
+                return make_result(Error::NotEnoughMemory, ServerTicket());
+            }
+            lenServerTicketToken = decodeData.length;
+            memcpy(serverTicketToken.get(), decodeData.buffer.get(), lenServerTicketToken);
+
+            decodeData = UtilsBase64::decode((const char*)obj_json["iv"]);
+            memcpy(iv.get(), decodeData.buffer.get(), LENGTH_IV);
+
+            decodeData = UtilsBase64::decode((const char*)obj_json["auth_tag"]);
+            memcpy(authenTag.get(), decodeData.buffer.get(), LENGTH_AUTHEN_TAG);
         }
-        lenServerTicketToken = decodeData.length;
-        memcpy(serverTicketToken.get(), decodeData.buffer.get(), lenServerTicketToken);
 
-        encodeData = (const char*)obj_json["iv"];
-        decodeData = UtilsBase64::decode(encodeData);
-        memcpy(iv.get(), decodeData.buffer.get(), LENGTH_IV);
+        // Build server aad
+        {
+            size_t lenServerPubKey = strlen(serverPublicKey);
+            aad.length = 2 + 
+                         lenHubAddress +
+                         lenServerPubKey;
+            aad.buffer.reset(new (std::nothrow) byte[aad.length]);
+            if (aad.buffer == nullptr) {
+                return make_result(Error::NotEnoughMemory, ServerTicket());
+            }
+            memcpy(aad.buffer.get(), &ticketID, 2);
+            memcpy(aad.buffer.get() + 2, hubAddress, lenHubAddress);
+            memcpy(aad.buffer.get() + (2 + lenHubAddress), serverPublicKey, lenServerPubKey);
+        }
 
-        encodeData = (const char*)obj_json["auth_tag"];
-        decodeData = UtilsBase64::decode(encodeData);
-        memcpy(authenTag.get(), decodeData.buffer.get(), LENGTH_AUTHEN_TAG);        
+        // Parse hub_address string to hub_ip + hub_port
+        {
+            uint8_t index = -1;
+            for (uint8_t idx = lenHubAddress - 1; idx >= 0; --idx) {
+                if (hubAddress[idx] == ':') {
+                    index = idx;
+                    break;
+                }
+            }
+            if (index == -1) {
+                return make_result(Error::CSOProxy_InvalidHubAddress, ServerTicket());
+            }
+
+            hubIP.assign(hubAddress, index);
+            hubPort = atoi(hubAddress + index + 1);
+        }
+
+        // Build big number for server_public_key
+        errorCode = serverPubKey.setString(serverPublicKey);
+        if (errorCode != Error::Nil) {
+            return make_result(errorCode, ServerTicket());
+        }
     }
-    
-    // Build server aad
-    Array<byte> aad;
-    aad.length = 2 + 
-                 hubAddress.length() + 
-                 serverPubKey.length();
-    aad.buffer.reset(new (std::nothrow) byte[aad.length]);
-    if (aad.buffer == nullptr) {
-        return std::pair<Error::Code, ServerTicket>(Error::NotEnoughMemory, ServerTicket());
-    }
-    memcpy(aad.buffer.get(), &ticketID, 2);
-    memcpy(aad.buffer.get() + 2, hubAddress.c_str(), hubAddress.length());
-    memcpy(aad.buffer.get() + (2 + hubAddress.length()), serverPubKey.c_str(), serverPubKey.length());
 
     // Build server secret key
-    UtilsDH::calcSecretKey(serverKey.nKey, clientPrivKey, BigNum(serverPubKey.c_str()), secretKey.get());
+    errorCode = UtilsDH::calcSecretKey(
+        serverKey.nKey, 
+        clientPrivKey, 
+        serverPubKey, 
+        secretKey.get()
+    );
+    if (errorCode != Error::Nil) {
+        return make_result(errorCode, ServerTicket());
+    }
 
     // Decrypt server ticket token
     errorCode = UtilsAES::decrypt(
@@ -264,20 +336,21 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
         token.buffer.get()
     );
     if (errorCode != Error::Nil) {
-        return std::make_pair(errorCode, ServerTicket());
+        return make_result(errorCode, ServerTicket());
     }
 
     // Parse server ticket token to bytes
     Result<byte*> ticket = Ticket::buildBytes(ticketID, token.buffer.get());
     if (ticket.errorCode != Error::Nil) {
-        return std::make_pair(ticket.errorCode, ServerTicket());
+        return make_result(ticket.errorCode, ServerTicket());
     }
     
     // Done
-    return std::make_pair(
+    return make_result(
         Error::Nil, 
         ServerTicket(
-            Address::parse(hubAddress.c_str()),
+            std::move(hubIP),
+            hubPort,
             ticketID,
             ticket.data,
             secretKey.release() // Don't use "get()" because after function done
@@ -289,23 +362,41 @@ std::pair<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& 
 //========
 // PRIVATE
 //========
-std::pair<Error::Code, std::string> Proxy::sendPOST(const char* url, byte* content, uint16_t length) {
+Result<std::string> Proxy::sendPOST(const char* url, uint8_t* content, uint16_t length) {
+    // WiFiClientSecure secureClient;
+    // secureClient.setTimeout(20000);
+    // secureClient.setInsecure();
+
+    // log_e("%s", url);
+    // log_e("Start connect");
+    // if (!secureClient.connect("https://goldeneyetech.com.vn", 443)) {
+    //     log_e("Send POST failed");
+    //     vTaskDelay(1000);
+    //     return std::pair<Error::Code, std::string>(Error::NotConnectServer, "");
+    // }
+    // log_e("Send POST success");
+    
     HTTPClient http;
     http.setTimeout(20000); // 20s
     if (!http.begin(url)) {
-        return std::make_pair(Error::CSOProxy_Disconnected, "");
+        // secureClient.stop();
+        return make_result(Error::CSOProxy_Disconnected, std::string(""));
     }
 
     http.addHeader("Content-Type", "application/json");
     auto status = http.POST(content, length);
     if (status != 200) {
         http.end();
-        return std::make_pair(Error::adaptExternalCode(ExtTag::HTTP, status), "");
+        return make_result(
+            Error::adaptExternalCode(Location::CSO_Proxy, ExternalTag::HTTP, status), 
+            std::string("")
+        );
     }
 
     std::string resp(http.getString().c_str());
     http.end();
-    return std::make_pair(Error::Nil, resp);
+    // secureClient.stop();
+    return make_result(Error::Nil, std::move(resp));
 }
 
 Error::Code Proxy::verifyDHKeys(const char* gKey, const char* nKey, const char* pubKey, const char* encodeSign) {
@@ -314,9 +405,9 @@ Error::Code Proxy::verifyDHKeys(const char* gKey, const char* nKey, const char* 
     uint16_t lenNKey = strlen(nKey);
     uint16_t lenPubKey = strlen(pubKey);
 
-    Array<byte> data;
+    Array<uint8_t> data;
     data.length = lenGKey + lenNKey + lenPubKey;
-    data.buffer.reset(new (std::nothrow) byte[data.length]);
+    data.buffer.reset(new (std::nothrow) uint8_t[data.length]);
     if (data.buffer == nullptr) {
         return Error::NotEnoughMemory;
     }
@@ -326,11 +417,11 @@ Error::Code Proxy::verifyDHKeys(const char* gKey, const char* nKey, const char* 
     memcpy(data.buffer.get() + (lenGKey + lenNKey), pubKey, lenPubKey);
 
     // Decode signature to bytes
-    Array<byte> signature(UtilsBase64::decode(encodeSign));
+    Array<uint8_t> signature(UtilsBase64::decode(encodeSign));
     
     // Verify
     return UtilsRSA::verifySignature(
-        (byte*)this->config->getCSOPublicKey().c_str(), 
+        (uint8_t*)this->config->getCSOPublicKey().c_str(), 
         signature.buffer.get(),
         signature.length,
         data.buffer.get(), 
@@ -338,22 +429,22 @@ Error::Code Proxy::verifyDHKeys(const char* gKey, const char* nKey, const char* 
     );
 }
 
-Error::Code Proxy::buildEncyptToken(const char* clientPubKey, const std::unique_ptr<byte>& secretKey, std::unique_ptr<byte>& iv, std::unique_ptr<byte>& authenTag, Array<byte>& token) {
+Error::Code Proxy::buildEncyptToken(const char* clientPubKey, const std::unique_ptr<uint8_t>& secretKey, std::unique_ptr<uint8_t>& iv, std::unique_ptr<uint8_t>& authenTag, Array<uint8_t>& token) {
     // Decode client token
-    Array<byte> decodedToken;
+    Array<uint8_t> decodedToken;
     {
         const std::string& encodeToken = this->config->getProjectToken();
         decodedToken = UtilsBase64::decode(encodeToken.c_str(), encodeToken.length());
     }
 
     // Build client aad
-    Array<byte> aad;
+    Array<uint8_t> aad;
     {
         uint16_t lenPubKey = strlen(clientPubKey);
         uint16_t lenPID = this->config->getProjectID().length();
         uint16_t lenCName = this->config->getConnectionName().length();
         aad.length = lenPID + lenCName + lenPubKey;
-        aad.buffer.reset(new (std::nothrow) byte[aad.length]);
+        aad.buffer.reset(new (std::nothrow) uint8_t[aad.length]);
         if (aad.buffer == nullptr) {
             return Error::NotEnoughMemory;
         }
@@ -363,18 +454,18 @@ Error::Code Proxy::buildEncyptToken(const char* clientPubKey, const std::unique_
     }
 
     // Buil encrypt client token
-    iv.reset(new (std::nothrow) byte[LENGTH_IV]);
+    iv.reset(new (std::nothrow) uint8_t[LENGTH_IV]);
     if (iv == nullptr) {
         return Error::NotEnoughMemory;
     }
 
-    authenTag.reset(new (std::nothrow) byte[LENGTH_AUTHEN_TAG]);
+    authenTag.reset(new (std::nothrow) uint8_t[LENGTH_AUTHEN_TAG]);
     if (authenTag == nullptr) {
         return Error::NotEnoughMemory;
     }
 
     token.length = decodedToken.length;
-    token.buffer.reset(new (std::nothrow) byte[token.length]);
+    token.buffer.reset(new (std::nothrow) uint8_t[token.length]);
     if (token.buffer == nullptr) {
         return Error::NotEnoughMemory;
     }    
