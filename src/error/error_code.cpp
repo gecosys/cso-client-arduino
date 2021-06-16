@@ -5,8 +5,8 @@
 
 char Error::content[LENGTH];
 
-Error::Code Error::adaptExternalCode(Location location, ExternalTag tag, int32_t code) noexcept {
-    return Error::Code(abs(code) | (tag << 24U) | (location << 16U));
+Error::Code Error::adaptExternalCode(ExternalTag tag, int32_t code) noexcept {
+    return Error::Code(abs(code) | (tag << 24U));
 }
 
 const char* Error::getContent(Error::Code code) noexcept {
@@ -16,54 +16,33 @@ const char* Error::getContent(Error::Code code) noexcept {
     return Error::content;
 }
 
-const char* Error::getContentLocation(Error::Code code) noexcept {
-    Location location = (Location)((code >> 16U) & 0x00FF);
-    if (location == Location::CSO_Proxy) {
-        return "[CSO_Proxy]";
-    }
-    if (location == Location::Utils_BigNum) {
-        return "[Utils_BigNum]";
-    }
-    if (location == Location::Utils_AES) {
-        return "[Utils_AES]";
-    }
-    if (location == Location::Utils_HMAC) {
-        return "[Utils_HMAC]";
-    }
-    if (location == Location::Utils_RSA) {
-        return "[Utils_RSA]";
-    }
-    return "";
-}
-
 bool Error::getContentExternalTag(Error::Code code) noexcept {
     ExternalTag tag = (ExternalTag)(code >> 24U);
     if (tag == ExternalTag::MbedTLS) {
-        sprintf(Error::content, "%s[MbedTLS] ", Error::getContentLocation(code));
-        size_t seek = strlen(Error::content);
-        mbedtls_strerror(-(code & 0x0000FFFFU), Error::content + seek, LENGTH - seek);
+        memcpy(Error::content, "[MbedTLS] ", 10);
+        mbedtls_strerror(-(code & 0x0000FFFFU), Error::content + 10, LENGTH - 10);
         return true;
     }
 
     if (tag == ExternalTag::ArduinoJSON) {
         DeserializationError oriCode((DeserializationError::Code)(code & 0x0000FFFFU));
-        sprintf(Error::content, "%s[ArduinoJSON] %s", Error::getContentLocation(code), oriCode.c_str());
+        sprintf(Error::content, "[ArduinoJSON] %s", oriCode.c_str());
         return true;
     }
 
     if (tag == ExternalTag::HTTP) {
         int32_t oriCode = (code & 0x0000FFFFU);
         if (oriCode >= 100) {
-            sprintf(Error::content, "%s[HTTP] Satus: %d", Error::getContentLocation(code), oriCode);
+            sprintf(Error::content, "[HTTP] Satus: %d", oriCode);
             return true;
         }
 
-        sprintf(Error::content, "%s[HTTP] %s", Error::getContentLocation(code), HTTPClient::errorToString(-oriCode).c_str());
+        sprintf(Error::content, "[HTTP] %s", HTTPClient::errorToString(-oriCode).c_str());
         return true;
     }
 
     if (tag == ExternalTag::Server) {
-        sprintf(Error::content, "%s[Server] Error code: %d", Error::getContentLocation(code), (code & 0x0000FFFFU));
+        sprintf(Error::content, "[Server] Error code: %d", (code & 0x0000FFFFU));
         return true;
     }
     return false;

@@ -74,14 +74,14 @@ Result<ServerKey> Proxy::exchangeKey() {
         auto jsonError = deserializeJson(doc, resp.data);
         if (jsonError) {
             return make_result(
-                Error::adaptExternalCode(Location::CSO_Proxy, ExternalTag::ArduinoJSON, jsonError.code()), 
+                Error::adaptExternalCode(ExternalTag::ArduinoJSON, jsonError.code()), 
                 ServerKey()
             );
         }
         auto serverErrorCode = (int32_t)doc["returncode"];
         if (serverErrorCode != 1) {
             return make_result(
-                Error::adaptExternalCode(Location::CSO_Proxy, ExternalTag::Server, serverErrorCode), 
+                Error::adaptExternalCode(ExternalTag::Server, serverErrorCode), 
                 ServerKey()
             );
         }
@@ -236,14 +236,14 @@ Result<ServerTicket> Proxy::registerConnection(const ServerKey& serverKey) {
             auto jsonError = deserializeJson(doc, resp.data);
             if (jsonError) {
                 return make_result(
-                    Error::adaptExternalCode(Location::CSO_Proxy, ExternalTag::ArduinoJSON, jsonError.code()), 
+                    Error::adaptExternalCode(ExternalTag::ArduinoJSON, jsonError.code()), 
                     ServerTicket()
                 );
             }
             auto serverErrorCode = (int32_t)doc["returncode"];
             if (serverErrorCode != 1) {
                 return make_result(
-                    Error::adaptExternalCode(Location::CSO_Proxy, ExternalTag::Server, serverErrorCode), 
+                    Error::adaptExternalCode(ExternalTag::Server, serverErrorCode), 
                     ServerTicket()
                 );
             }
@@ -388,7 +388,7 @@ Result<std::string> Proxy::sendPOST(const char* url, uint8_t* content, uint16_t 
     if (status != 200) {
         http.end();
         return make_result(
-            Error::adaptExternalCode(Location::CSO_Proxy, ExternalTag::HTTP, status), 
+            Error::adaptExternalCode(ExternalTag::HTTP, status), 
             std::string("")
         );
     }

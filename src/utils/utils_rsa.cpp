@@ -25,7 +25,7 @@ Error::Code UtilsRSA::verifySignature(const uint8_t* publicKey, const uint8_t* s
     );
     if (errorCode != 0) {
         mbedtls_pem_free(&pemCtx);
-        return Error::adaptExternalCode(Location::Utils_RSA, ExternalTag::MbedTLS, errorCode);
+        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
     }
 
     // Parse public key
@@ -35,7 +35,7 @@ Error::Code UtilsRSA::verifySignature(const uint8_t* publicKey, const uint8_t* s
     if (errorCode != 0) {
         mbedtls_pem_free(&pemCtx);
         mbedtls_pk_free(&pkCtx);
-        return Error::adaptExternalCode(Location::Utils_RSA, ExternalTag::MbedTLS, errorCode);
+        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
     }
 
     // Verify hashed data with signature
@@ -50,7 +50,7 @@ Error::Code UtilsRSA::verifySignature(const uint8_t* publicKey, const uint8_t* s
     mbedtls_pem_free(&pemCtx);
     mbedtls_pk_free(&pkCtx);
     if (errorCode != 0) {
-        return Error::adaptExternalCode(Location::Utils_RSA, ExternalTag::MbedTLS, errorCode);
+        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
     }    
     return Error::Nil;
 }

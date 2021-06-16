@@ -65,7 +65,7 @@ Error::Code BigNum::addAndAssign(const BigNum& n) noexcept {
     if (errorCode == 0) {
         return Error::Nil;
     }
-    return Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode);
+    return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
 }
 
 Error::Code BigNum::subAndAssign(const BigNum& n) noexcept {
@@ -73,7 +73,7 @@ Error::Code BigNum::subAndAssign(const BigNum& n) noexcept {
     if (errorCode == 0) {
         return Error::Nil;
     }
-    return Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode);
+    return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
 }
 
 Error::Code BigNum::mulAndAssign(const BigNum& n) noexcept {
@@ -81,7 +81,7 @@ Error::Code BigNum::mulAndAssign(const BigNum& n) noexcept {
     if (errorCode == 0) {
         return Error::Nil;
     }
-    return Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode);
+    return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
 }
 
 Error::Code BigNum::divAndAssign(const BigNum& n) noexcept {
@@ -89,7 +89,7 @@ Error::Code BigNum::divAndAssign(const BigNum& n) noexcept {
     if (errorCode == 0) {
         return Error::Nil;
     }
-    return Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode);
+    return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
 }
 
 Error::Code BigNum::modAndAssign(const BigNum& n) noexcept {
@@ -97,7 +97,7 @@ Error::Code BigNum::modAndAssign(const BigNum& n) noexcept {
     if (errorCode == 0) {
         return Error::Nil;
     }
-    return Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode);
+    return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
 }
 
 Error::Code BigNum::addAndAssign(int32_t n) noexcept {
@@ -105,7 +105,7 @@ Error::Code BigNum::addAndAssign(int32_t n) noexcept {
     if (errorCode == 0) {
         return Error::Nil;
     }
-    return Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode);
+    return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
 }
 
 Error::Code BigNum::subAndAssign(int32_t n) noexcept {
@@ -113,7 +113,7 @@ Error::Code BigNum::subAndAssign(int32_t n) noexcept {
     if (errorCode == 0) {
         return Error::Nil;
     }
-    return Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode);
+    return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
 }
 
 Error::Code BigNum::mulAndAssign(int32_t n) noexcept {
@@ -121,7 +121,7 @@ Error::Code BigNum::mulAndAssign(int32_t n) noexcept {
     if (errorCode != 0) {
         return Error::Nil;
     }
-    return Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode);
+    return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
 }
 
 Error::Code BigNum::divAndAssign(int32_t n) noexcept {
@@ -129,14 +129,14 @@ Error::Code BigNum::divAndAssign(int32_t n) noexcept {
     if (errorCode == 0) {
         return Error::Nil;
     }
-    return Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode);
+    return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
 }
 
 Error::Code BigNum::modAndAssign(int32_t n) noexcept {
     uint32_t result;
     auto errorCode = mbedtls_mpi_mod_int(&result, &this->core, n);
     if (errorCode != 0) {
-        return Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode);
+        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
     }
 
     mbedtls_mpi_free(&this->core);
@@ -152,10 +152,7 @@ Result<BigNum> BigNum::add(const BigNum& n) const noexcept {
     if (errorCode == 0) {
         return make_result(Error::Nil, std::move(result));
     }
-    return make_result(
-        Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), 
-        BigNum()
-    );
+    return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), BigNum());
 }
 
 Result<BigNum> BigNum::sub(const BigNum& n) const noexcept {
@@ -164,10 +161,7 @@ Result<BigNum> BigNum::sub(const BigNum& n) const noexcept {
     if (errorCode == 0) {
         return make_result(Error::Nil, std::move(result));
     }
-    return make_result(
-        Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), 
-        BigNum()
-    );
+    return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), BigNum());
 }
 
 Result<BigNum> BigNum::mul(const BigNum& n) const noexcept {
@@ -176,10 +170,7 @@ Result<BigNum> BigNum::mul(const BigNum& n) const noexcept {
     if (errorCode == 0) {
         return make_result(Error::Nil, std::move(result));
     }
-    return make_result(
-        Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), 
-        BigNum()
-    );
+    return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), BigNum());
 }
 
 Result<BigNum> BigNum::div(const BigNum& n) const noexcept {
@@ -188,10 +179,7 @@ Result<BigNum> BigNum::div(const BigNum& n) const noexcept {
     if (errorCode == 0) {
         return make_result(Error::Nil, std::move(result));
     }
-    return make_result(
-        Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), 
-        BigNum()
-    );
+    return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), BigNum());
 }
 
 Result<BigNum> BigNum::mod(const BigNum& n) const noexcept {
@@ -200,10 +188,7 @@ Result<BigNum> BigNum::mod(const BigNum& n) const noexcept {
     if (errorCode == 0) {
         return make_result(Error::Nil, std::move(result));
     }
-    return make_result(
-        Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), 
-        BigNum()
-    );
+    return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), BigNum());
 }
 
 Result<BigNum> BigNum::add(int32_t n) const noexcept {
@@ -212,10 +197,7 @@ Result<BigNum> BigNum::add(int32_t n) const noexcept {
     if (errorCode == 0) {
         return make_result(Error::Nil, std::move(result));
     }
-    return make_result(
-        Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), 
-        BigNum()
-    );
+    return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), BigNum());
 }
 
 Result<BigNum> BigNum::sub(int32_t n) const noexcept {
@@ -224,10 +206,7 @@ Result<BigNum> BigNum::sub(int32_t n) const noexcept {
     if (errorCode == 0) {
         return make_result(Error::Nil, std::move(result));
     }
-    return make_result(
-        Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), 
-        BigNum()
-    );
+    return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), BigNum());
 }
 
 Result<BigNum> BigNum::mul(int32_t n) const noexcept {
@@ -236,10 +215,7 @@ Result<BigNum> BigNum::mul(int32_t n) const noexcept {
     if (errorCode == 0) {
         return make_result(Error::Nil, std::move(result));
     }
-    return make_result(
-        Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), 
-        BigNum()
-    );
+    return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), BigNum());
 }
 
 Result<BigNum> BigNum::div(int32_t n) const noexcept {
@@ -248,17 +224,14 @@ Result<BigNum> BigNum::div(int32_t n) const noexcept {
     if (errorCode == 0) {
         return make_result(Error::Nil, std::move(result));
     }
-    return make_result(
-        Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), 
-        BigNum()
-    );
+    return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), BigNum());
 }
 
 Result<BigNum> BigNum::mod(int32_t n) const noexcept {
     uint32_t r;
     auto errorCode = mbedtls_mpi_mod_int(&r, &this->core, n);
     if (errorCode != 0) {
-        return make_result(Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), BigNum());
+        return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), BigNum());
     }
 
     BigNum result;
@@ -266,10 +239,7 @@ Result<BigNum> BigNum::mod(int32_t n) const noexcept {
     if (errorCode == Error::Nil) {
         return make_result(Error::Nil, std::move(result));
     }
-    return make_result(
-        Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), 
-        BigNum()
-    );
+    return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), BigNum());
 }
 
 //========
@@ -332,10 +302,7 @@ Result<BigNum> BigNum::powMod(const BigNum& power, const BigNum& modulus) const 
     if (errorCode == 0) {
         return make_result(Error::Nil, std::move(result));
     }
-    return make_result(
-        Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), 
-        BigNum()
-    );
+    return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), BigNum());
 }
 
 Result<std::string> BigNum::toString(int8_t radix) const  noexcept {
@@ -352,13 +319,10 @@ Result<std::string> BigNum::toString(int8_t radix) const  noexcept {
     }
 
     auto errorCode = mbedtls_mpi_write_string(&this->core, radix, buffer.get(), lenBuffer, &lenBuffer);
-    if (errorCode != 0) {
-        return make_result(
-            Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode), 
-            std::string("")
-        );
+    if (errorCode == 0) {
+        return make_result(Error::Nil, std::string(buffer.get()));
     }
-    return make_result(Error::Nil, std::string(buffer.get()));
+    return make_result(Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode), std::string(""));
 }
 
 //========
@@ -370,7 +334,7 @@ Error::Code BigNum::initFromString(mbedtls_mpi* out, const char* str, int8_t rad
     if (errorCode == 0) {
         return Error::Nil;
     }
-    return Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode);
+    return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
 }
 
 Error::Code BigNum::initFromBinary(mbedtls_mpi* out, const uint8_t* buffer,  size_t bufflen) noexcept {
@@ -379,5 +343,5 @@ Error::Code BigNum::initFromBinary(mbedtls_mpi* out, const uint8_t* buffer,  siz
     if (errorCode == 0) {
         return Error::Nil;
     }
-    return Error::adaptExternalCode(Location::Utils_BigNum, ExternalTag::MbedTLS, errorCode);
+    return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
 }

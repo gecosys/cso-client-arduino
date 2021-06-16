@@ -23,14 +23,6 @@ enum ExternalTag : uint8_t {
     Server      = 3U,
 };
 
-enum Location : uint8_t {
-    CSO_Proxy    = 1U,
-    Utils_BigNum = 2U,
-    Utils_AES    = 3U,
-    Utils_HMAC   = 4U,
-    Utils_RSA    = 5U,
-};
-
 class Error {
 private:
     static char content[LENGTH];
@@ -72,7 +64,7 @@ private:
     static void getContentInternalTag(Error::Code code) noexcept;
 
 public:
-    static Error::Code adaptExternalCode(Location location, ExternalTag tag, int32_t code) noexcept;
+    static Error::Code adaptExternalCode(ExternalTag tag, int32_t code) noexcept;
     static const char* getContent(Error::Code code) noexcept;
 };
 
