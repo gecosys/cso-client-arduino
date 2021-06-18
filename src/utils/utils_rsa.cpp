@@ -1,25 +1,20 @@
-#include <utils/utils_rsa.h>
-
 extern "C" {
-    #include "mbedtls/pem.h"
-    #include "mbedtls/pk.h"
-    #include "mbedtls/sha256.h"
-    #include "mbedtls/error.h"
+    #include <mbedtls/pk.h>
+    #include <mbedtls/pem.h>
+    #include <mbedtls/sha256.h>
 }
+#include "utils/utils_rsa.h"
 
-void UtilsRSA::parseError(int errorCode, char *buffer, uint16_t buffLen) {
-    mbedtls_strerror(errorCode, buffer, buffLen);
-}
 
-int UtilsRSA::verifySignature(unsigned char *publicKey, uint8_t sign[LENGTH_SIGN], uint8_t *data, uint16_t sizeData) {
-    unsigned char hashed[32];
-    mbedtls_sha256((unsigned char *)data, sizeData, hashed, 0);
-    
+Error::Code UtilsRSA::verifySignature(const uint8_t* publicKey, const uint8_t* sign, uint16_t sizeSign, const uint8_t* data, uint16_t sizeData) {
+    uint8_t hashed[32];
+    mbedtls_sha256(data, sizeData, hashed, 0);
+
     // Parse PEM
     size_t usedLen;
     mbedtls_pem_context pemCtx;
     mbedtls_pem_init(&pemCtx);
-    auto errCode = mbedtls_pem_read_buffer(
+    auto errorCode = mbedtls_pem_read_buffer(
         &pemCtx,
         "-----BEGIN PUBLIC KEY-----",
         "-----END PUBLIC KEY-----",
@@ -28,34 +23,34 @@ int UtilsRSA::verifySignature(unsigned char *publicKey, uint8_t sign[LENGTH_SIGN
         0,
         &usedLen
     );
-    if (errCode != 0) {
+    if (errorCode != 0) {
         mbedtls_pem_free(&pemCtx);
-        return errCode;
+        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
     }
 
     // Parse public key
     mbedtls_pk_context pkCtx;
     mbedtls_pk_init(&pkCtx);
-    errCode = mbedtls_pk_parse_public_key(&pkCtx, pemCtx.buf, pemCtx.buflen);
-    if (errCode != 0) {
+    errorCode = mbedtls_pk_parse_public_key(&pkCtx, pemCtx.buf, pemCtx.buflen);
+    if (errorCode != 0) {
         mbedtls_pem_free(&pemCtx);
         mbedtls_pk_free(&pkCtx);
-        return errCode;
+        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
     }
 
     // Verify hashed data with signature
-    errCode = mbedtls_pk_verify(
+    errorCode = mbedtls_pk_verify(
         &pkCtx,
         MBEDTLS_MD_SHA256,
         hashed,
         32,
         sign,
-        256
+        sizeSign
     );
     mbedtls_pem_free(&pemCtx);
     mbedtls_pk_free(&pkCtx);
-    if (errCode != 0) {
-        return errCode;
-    }
-    return SUCCESS;
+    if (errorCode != 0) {
+        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
+    }    
+    return Error::Nil;
 }
