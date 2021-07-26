@@ -1,10 +1,10 @@
-#ifndef _CSO_COUNTER_H_
-#define _CSO_COUNTER_H_
+#ifndef CSO_COUNTER_H
+#define CSO_COUNTER_H
 
 #include <atomic>
 #include <memory>
 #include "interface.h"
-#include "synchronization/spin_lock.h"
+#include "entity/spin_lock.h"
 
 class Counter : public ICounter {
 private:
@@ -25,13 +25,14 @@ public:
     Counter() = delete;
     Counter(Counter&& other) = delete;
     Counter(const Counter& other) = delete;
-    Counter& operator=(const Counter& other) = delete;
+    ~Counter() noexcept = default;
 
-    ~Counter() noexcept;
+    Counter& operator=(Counter&& other) = delete;
+    Counter& operator=(const Counter& other) = delete;
 
     uint64_t nextWriteIndex() noexcept;
     void markReadUnused(uint64_t index) noexcept;
     bool markReadDone(uint64_t index) noexcept;
 };
 
-#endif //_CSO_COUNTER_H_
+#endif // !CSO_COUNTER_H

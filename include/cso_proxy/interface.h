@@ -1,16 +1,16 @@
-#ifndef _CSO_PROXY_INTERFACE_H_
-#define _CSO_PROXY_INTERFACE_H_
+#ifndef CSO_PROXY_INTERFACE_H
+#define CSO_PROXY_INTERFACE_H
 
+#include <tuple>
 #include <memory>
 #include "server_key.h"
 #include "server_ticket.h"
-#include "utils/result.h"
-#include "error/error_code.h"
+#include "error/error.h"
 
 class IProxy {
 public:
-    virtual Result<ServerKey> exchangeKey() = 0;
-    virtual Result<ServerTicket> registerConnection(const ServerKey& serverKey) = 0;
+    virtual std::tuple<Error::Code, ServerKey> exchangeKey() = 0;
+    virtual std::tuple<Error::Code, ServerTicket> registerConnection(const ServerKey& serverKey) = 0;
 };
 
-#endif //_PROXY_INTERFACE_H_
+#endif // !CSO_PROXY_INTERFACE_H

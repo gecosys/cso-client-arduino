@@ -1,9 +1,7 @@
 #include "cso_queue/item_ref.h"
 
-ItemQueueRef::ItemQueueRef(ItemQueue* ptr) noexcept
-    : ptr(ptr) {}
-
-ItemQueueRef::~ItemQueueRef() noexcept {}
+ItemQueueRef::ItemQueueRef(std::shared_ptr<ItemQueue>&& ptr) noexcept
+    : ptr{ std::forward<std::shared_ptr<ItemQueue>>(ptr) } {}
 
 bool ItemQueueRef::empty() const noexcept {
     return this->ptr == nullptr;

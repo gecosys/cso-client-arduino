@@ -1,6 +1,6 @@
 // #include <lwip/sockets.h>
-#include <new>
 #include "cso_connection/connection.h"
+#include "error/package/connection_err.h"
 
 #define HEADER_SIZE 2
 #define BUFFER_SIZE 1024
@@ -10,50 +10,49 @@ std::unique_ptr<IConnection> Connection::build(uint16_t queueSize) {
 }
 
 Connection::Connection(uint16_t queueSize) 
-    : nextMessage(queueSize),
-      status(Status::Prepare) {}
+    : client{},
+      status(Status::Disconnected),
+      nextMsg{ queueSize } {}
 
 Connection::~Connection() noexcept {
     this->client.stop();
 }
 
-Error::Code Connection::connect(const char* host, uint16_t port) {
-    if (this->status.load() == Status::Connected) {
-        return Error::Nil;
+Error::Code Connection::connect(const std::string& host, uint16_t port) {
+    if (this->status.load(std::memory_order_acquire) == Status::Connected) {
+        return Error::Code::Nil;
     }
+
     uint8_t retry = 0;
-    while (!client.connect(host, port)) {
+    while (!client.connect(host.c_str(), port)) {
         if (++retry >= 2) {
-            return Error::CSOConnection_Disconnected;
+            return Error::buildCode(
+                ConnectionErr::ID,
+                ConnectionErr::Func::Connection_Connect,
+                ConnectionErr::Reason::Socket_ConnectFailed
+            );
         }
         vTaskDelay(100);
     }
-
-    if (!setup()) {
-        return Error::CSOConnection_SetupFailed;
-    }
-    this->status.store(Status::Connected);
+    this->status.store(Status::Connected, std::memory_order_release);
     return Error::Nil;
 }
 
 Error::Code Connection::loopListen() {
-    std::unique_ptr<uint8_t> buffer(new (std::nothrow) uint8_t[BUFFER_SIZE]);
-    if (buffer == nullptr) {
-        return Error::NotEnoughMemory;
-    }
-
-    bool header = true;
+    bool header{ true };
     // bool disconnected = true;
-    uint8_t* message = nullptr;
-    uint16_t seek = 0;
-    uint16_t readed = 0;
-    uint16_t length = HEADER_SIZE;
+    uint16_t seek{ 0 };
+    uint16_t readed{ 0 };
+    uint16_t length{ HEADER_SIZE };
+    uint8_t* message{ nullptr };
+    std::unique_ptr<uint8_t> buffer{ new uint8_t[BUFFER_SIZE] };
 
-    while (WiFi.status() == WL_CONNECTED && this->status.load() == Status::Connected) {
+    while (WiFi.status() == WL_CONNECTED && 
+           this->status.load(std::memory_order_acquire) == Status::Connected) {
         if (this->client.available() <= 0) {
             // disconnected = false;
             // break;
-            vTaskDelay(50 / portTICK_PERIOD_MS);
+            delay(50);
             continue;
         }
 
@@ -62,7 +61,7 @@ Error::Code Connection::loopListen() {
         if (readed <= 0) {
             // disconnected = false;
             // break;
-            vTaskDelay(50 / portTICK_PERIOD_MS);
+            delay(50);
             continue;
         }
 
@@ -83,15 +82,10 @@ Error::Code Connection::loopListen() {
         }
 
         // Build "message"
-        message = new (std::nothrow) uint8_t[length];
-        if (message == nullptr) {
-            return Error::NotEnoughMemory;
-        }
-
-        // Push message
         // Don't delete "message" because queue will manage memory
+        message = new uint8_t[length];
         memcpy(message, buffer.get(), length);
-        this->nextMessage.push(Array<uint8_t>(message, length));
+        this->nextMsg.try_push(Array<uint8_t>{ message, length });
 
         // disconnected = false;
         // break;
@@ -100,9 +94,14 @@ Error::Code Connection::loopListen() {
         header = true;
         seek = 0;
     }
+
     this->client.stop();
-    this->status.store(Status::Disconnected);
-    return Error::CSOConnection_Disconnected;
+    this->status.store(Status::Disconnected, std::memory_order_release);
+    return Error::buildCode(
+        ConnectionErr::ID,
+        ConnectionErr::Func::Connection_LoopListen,
+        ConnectionErr::Reason::Socket_Disconnected
+    );
     // if (disconnected) {
     //     this->client.stop();        
     //     this->status = Status::Disconnected;
@@ -111,21 +110,23 @@ Error::Code Connection::loopListen() {
     // return Error::Nil;
 }
 
-Error::Code Connection::sendMessage(uint8_t* data, uint16_t nBytes) {
-    if (WiFi.status() != WL_CONNECTED || this->status.load() != Status::Connected) {
-        this->status = Status::Disconnected;
-        return Error::CSOConnection_Disconnected;
+Error::Code Connection::sendMessage(const Array<uint8_t>& data) {
+    if (WiFi.status() != WL_CONNECTED || 
+        this->status.load(std::memory_order_acquire) != Status::Connected) {
+        return Error::buildCode(
+            ConnectionErr::ID,
+            ConnectionErr::Func::Connection_SendMessage,
+            ConnectionErr::Reason::Socket_Disconnected
+        );
     }
 
     //============
     // Make buffer
     //============
-    std::unique_ptr<uint8_t> buffer(new (std::nothrow) uint8_t[nBytes + HEADER_SIZE]); // Add 2 bytes "data length"
-    if (buffer == nullptr) {
-        return Error::NotEnoughMemory;
-    }
+    uint16_t nBytes{ data.length() };
+    std::unique_ptr<uint8_t> buffer(new uint8_t[HEADER_SIZE + nBytes]); // Add 2 bytes "data length"
     memcpy(buffer.get(), &nBytes, sizeof(uint16_t));
-    memcpy(buffer.get() + HEADER_SIZE, data, nBytes);
+    memcpy(buffer.get() + HEADER_SIZE, data.get(), nBytes);
 
     //===============
     // Send and check
@@ -133,29 +134,28 @@ Error::Code Connection::sendMessage(uint8_t* data, uint16_t nBytes) {
     nBytes += HEADER_SIZE;
     for (size_t seek = 0, sent = 0; seek < nBytes; seek += sent) {
         sent = this->client.write(buffer.get() + seek, nBytes - seek);
-        if (sent == 0) {
-            this->client.stop();
-            this->status.store(Status::Disconnected);
-            return Error::CSOConnection_Disconnected;
+        if (sent > 0) {
+            continue;
         }
+
+        this->client.stop();
+        this->status.store(Status::Disconnected, std::memory_order_release);
+        return Error::buildCode(
+            ConnectionErr::ID,
+            ConnectionErr::Func::Connection_SendMessage,
+            ConnectionErr::Reason::Socket_Disconnected
+        );
     }
     return Error::Nil;
 }
 
 Array<uint8_t> Connection::getMessage() {
-    return this->nextMessage.pop().data;
-}
+    Error::Code errcode;
+    Array<uint8_t> msg;
 
-bool Connection::setup() noexcept {
-    // timeout 20s for read + write
-    if (this->client.setTimeout(20) != ESP_OK) {
-        return false;
+    std::tie(errcode, msg) = this->nextMsg.try_pop();
+    if (errcode != Error::Code::Nil) {
+        return Array<uint8_t>{};
     }
-
-    // Keep connection
-    int32_t val = 1;
-    if (this->client.setSocketOption(0x0008, (char*)&val, sizeof(int32_t)) != ESP_OK) {
-        return false;
-    }
-    return true;
+    return msg;
 }

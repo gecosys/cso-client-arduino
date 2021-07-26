@@ -1,12 +1,12 @@
-#ifndef _MESSAGE_CIPHER_H_
-#define _MESSAGE_CIPHER_H_
+#ifndef MESSAGE_CIPHER_H
+#define MESSAGE_CIPHER_H
 
+#include <tuple>
+#include <string>
 #include <memory>
-#include <cstdint>
-#include "utils/array.h"
-#include "utils/result.h"
+#include "error/error.h"
+#include "entity/array.h"
 #include "message/type.h"
-#include "message/define.h"
 
 class Cipher {
 private:
@@ -16,24 +16,35 @@ private:
     bool isLast;
     bool isRequest;
     bool isEncrypted;
-    uint8_t iv[LENGTH_IV];
-    uint8_t sign[LENGTH_SIGN_HMAC];
-    uint8_t authenTag[LENGTH_AUTHEN_TAG];
-    uint16_t sizeData;
-    uint8_t* data;
-    uint8_t lenName;
-    char* name;
+    Array<uint8_t> iv;
+    Array<uint8_t> authenTag;
+    Array<uint8_t> sign;
+    Array<uint8_t> data;
+    std::string name;
     MessageType msgType;
 
-    static Result<Array<uint8_t>> buildBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t* data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG], uint8_t sign[LENGTH_SIGN_HMAC]) noexcept;
+private:
+    static std::tuple<Error::Code, Array<uint8_t>> buildBytes(
+        uint64_t msgID,
+        uint64_t msgTag,
+        MessageType msgType,
+        bool isEncrypted,
+        bool isFirst,
+        bool isLast,
+        bool isRequest,
+        const std::string& name,
+        const Array<uint8_t>& iv,
+        const Array<uint8_t>& authenTag,
+        const Array<uint8_t>& sign,
+        const Array<uint8_t>& data);
 
 public:
     Cipher() noexcept;
+    Cipher(const Cipher& other) = default;
     Cipher(Cipher&& other) noexcept;
-    Cipher(const Cipher& other) = delete;
-    ~Cipher() noexcept;
+    ~Cipher() noexcept = default;
 
-    Cipher& operator=(const Cipher& other) = delete;
+    Cipher& operator=(const Cipher& other) = default;
     Cipher& operator=(Cipher&& other) noexcept;
 
     void setMsgID(uint64_t msgID) noexcept;
@@ -43,36 +54,85 @@ public:
     void setIsLast(bool isLast) noexcept;
     void setIsRequest(bool isRequest) noexcept;
     void setIsEncrypted(bool isEncrypted) noexcept;
-    void setIV(uint8_t iv[LENGTH_IV]) noexcept;
-    void setSign(uint8_t sign[LENGTH_SIGN_HMAC]) noexcept;
-    void setAuthenTag(uint8_t authenTag[LENGTH_AUTHEN_TAG]) noexcept;
-    void setName(char* name, uint8_t lenName) noexcept;
-    void setData(uint8_t* data, uint16_t sizeData) noexcept;
+    // "iv" has fixed length is LENGTH_IV in message/define.h
+    Error::Code setIV(const Array<uint8_t>& iv) noexcept;
+    // "authenTag" has fixed length is LENGTH_AUTHEN_TAG in message/define.h
+    Error::Code setAuthenTag(const Array<uint8_t>& authenTag) noexcept;
+    // "sign" has fixed length is LENGTH_SIGN in message/define.h
+    Error::Code setSign(const Array<uint8_t>& sign) noexcept;
+    void setName(const std::string& name);
+    void setName(std::string&& name) noexcept;
+    void setData(const Array<uint8_t>& data);
+    void setData(Array<uint8_t>&& data) noexcept;
 
-    uint64_t getMsgID() noexcept;
-    uint64_t getMsgTag() noexcept;
-    MessageType getMsgType() noexcept;
-    bool getIsFirst() noexcept;
-    bool getIsLast() noexcept;
-    bool getIsRequest() noexcept;
-    bool getIsEncrypted() noexcept;
-    uint8_t* getIV() noexcept;
-    uint8_t* getSign() noexcept;
-    uint8_t* getAuthenTag() noexcept;
-    char* getName() noexcept;
-    uint8_t getLengthName() noexcept;
-    uint8_t* getData() noexcept;
-    uint16_t getSizeData() noexcept;
+    uint64_t getMsgID() const noexcept;
+    uint64_t getMsgTag() const noexcept;
+    MessageType getMsgType() const noexcept;
+    bool getIsFirst() const noexcept;
+    bool getIsLast() const noexcept;
+    bool getIsRequest() const noexcept;
+    bool getIsEncrypted() const noexcept;
 
-    Result<Array<uint8_t>> intoBytes() noexcept;
-    Result<Array<uint8_t>> getRawBytes() noexcept;
-    Result<Array<uint8_t>> getAad() noexcept;
+    // 'iv' has fixed length is 'LENGTH_IV' in' message/define.h'
+    const Array<uint8_t>& getIV() const noexcept;
+    // 'authenTag' has fixed length is 'LENGTH_AUTHEN_TAG' in 'message/define.h'
+    const Array<uint8_t>& getAuthenTag() const noexcept;
+    // 'sign' has fixed length is 'LENGTH_SIGN' in 'message/define.h'
+    const Array<uint8_t>& getSign() const noexcept;
+    const std::string& getName() const noexcept;
+    const Array<uint8_t>& getData() const noexcept;
 
-    static Result<std::unique_ptr<Cipher>> parseBytes(uint8_t* buffer, uint16_t sizeBuffer) noexcept;
-    static Result<Array<uint8_t>> buildRawBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName, uint8_t* data, uint16_t sizeData) noexcept;
-    static Result<Array<uint8_t>> buildAad(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName) noexcept;
-    static Result<Array<uint8_t>> buildCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t* data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG]) noexcept;
-    static Result<Array<uint8_t>> buildNoCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName, uint8_t* data, uint16_t sizeData, uint8_t sign[LENGTH_SIGN_HMAC]) noexcept;
+    std::tuple<Error::Code, Array<uint8_t>> intoBytes();
+    std::tuple<Error::Code, Array<uint8_t>> getRawBytes();
+    std::tuple<Error::Code, Array<uint8_t>> getAad();
+
+    static std::tuple<Error::Code, std::unique_ptr<Cipher>> parseBytes(const Array<uint8_t>& buffer);
+
+    static std::tuple<Error::Code, Array<uint8_t>> buildRawBytes(
+        uint64_t msgID,
+        uint64_t msgTag,
+        MessageType msgType,
+        bool isEncrypted,
+        bool isFirst,
+        bool isLast,
+        bool isRequest,
+        const std::string& name,
+        const Array<uint8_t>& data);
+
+    static std::tuple<Error::Code, Array<uint8_t>> buildAad(
+        uint64_t msgID,
+        uint64_t msgTag,
+        MessageType msgType,
+        bool isEncrypted,
+        bool isFirst,
+        bool isLast,
+        bool isRequest,
+        const std::string& name);
+
+    // "iv" has fixed length is 12
+    // "authenTag" has fixed length is 16
+    static std::tuple<Error::Code, Array<uint8_t>> buildCipherBytes(
+        uint64_t msgID,
+        uint64_t msgTag,
+        MessageType msgType,
+        bool isFirst,
+        bool isLast,
+        bool isRequest,
+        const std::string& name,
+        const Array<uint8_t>& iv,
+        const Array<uint8_t>& authenTag,
+        const Array<uint8_t>& data);
+
+    static std::tuple<Error::Code, Array<uint8_t>> buildNoCipherBytes(
+        uint64_t msgID,
+        uint64_t msgTag,
+        MessageType msgType,
+        bool isFirst,
+        bool isLast,
+        bool isRequest,
+        const std::string& name,
+        const Array<uint8_t>& sign,
+        const Array<uint8_t>& data);
 };
 
-#endif
+#endif // !MESSAGE_CIPHER_H

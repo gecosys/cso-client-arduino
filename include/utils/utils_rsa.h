@@ -1,13 +1,13 @@
-#ifndef _UTILS_RSA_H_
-#define _UTILS_RSA_H_
+#ifndef UTILS_RSA_H
+#define UTILS_RSA_H
 
 #include <cstdint>
-#include "message/define.h"
-#include "error/error_code.h"
+#include "entity/array.h"
+#include "error/error.h"
 
 class UtilsRSA {
 public:
-    static Error::Code verifySignature(const uint8_t* publicKey, const uint8_t* sign, uint16_t sizeSign, const uint8_t *data, uint16_t sizeData);
+    static std::tuple<Error::Code, bool> verifySignature(const std::string& publicKey, const Array<uint8_t>& signature, const Array<uint8_t>& data);
 };
 
-#endif
+#endif //!UTILS_RSA_H

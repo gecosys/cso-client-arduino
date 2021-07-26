@@ -1,8 +1,11 @@
-#ifndef _MESSAGE_READYTICKET_H_
-#define _MESSAGE_READYTICKET_H_
+#ifndef MESSAGE_READYTICKET_H
+#define MESSAGE_READYTICKET_H
 
+#include <tuple>
+#include <memory>
 #include <cstdint>
-#include "utils/result.h"
+#include "entity/array.h"
+#include "error/error.h"
 
 class ReadyTicket {
 private:
@@ -12,12 +15,15 @@ private:
     uint64_t idxWrite;
 
 public:
+    ReadyTicket() noexcept;
+    ~ReadyTicket() noexcept;
+
     bool getIsReady() noexcept;
     uint64_t getIdxRead() noexcept;
     uint32_t getMaskRead() noexcept;
     uint64_t getIdxWrite() noexcept;
 
-    static Result<ReadyTicket*> parseBytes(uint8_t* buffer, uint8_t sizeBuffer) noexcept;
+    static std::tuple<Error::Code, std::unique_ptr<ReadyTicket>> parseBytes(const Array<uint8_t>& data) noexcept;
 };
 
-#endif
+#endif // !MESSAGE_READYTICKET_H

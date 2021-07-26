@@ -1,5 +1,5 @@
-#ifndef _SYNCHRONIZATION_SPIN_LOCK_H_
-#define _SYNCHRONIZATION_SPIN_LOCK_H_
+#ifndef ENTITY_SPIN_LOCK_H
+#define ENTITY_SPIN_LOCK_H
 
 #include <FreeRTOS.h>
 #include <freertos/portmacro.h>
@@ -15,8 +15,11 @@ public:
     SpinLock(const SpinLock& other) = delete;
     ~SpinLock();
 
+    SpinLock& operator=(SpinLock&& lock) = delete;
+    SpinLock& operator=(const SpinLock& lock) = delete;
+
     void lock();
     void unlock();
 };
 
-#endif //_SYNCHRONIZATION_SPIN_LOCK_H_
+#endif // !ENTITY_SPIN_LOCK_H

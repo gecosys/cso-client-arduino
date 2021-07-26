@@ -1,4 +1,4 @@
-#include "synchronization/spin_lock.h"
+#include "entity/spin_lock.h"
 
 SpinLock::SpinLock() {
     vPortCPUInitializeMutex(&this->core);

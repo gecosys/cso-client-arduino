@@ -1,47 +1,53 @@
-#include <new>
 #include <cstring>
 #include "message/ticket.h"
 #include "message/define.h"
+#include "error/package/message_err.h"
+
+Ticket::Ticket() noexcept 
+    : id{},
+      token{ LENGTH_TICKET_TOKEN } {}
+
+Ticket::~Ticket() noexcept {}
 
 uint16_t Ticket::getID() noexcept {
     return this->id;
 }
 
-uint8_t *Ticket::getToken() noexcept {
+const Array<uint8_t>& Ticket::getToken() noexcept {
     return this->token;
 }
 
-Result<Ticket*> Ticket::parseBytes(uint8_t* buffer, uint8_t sizeBuffer) noexcept {
-    Result<Ticket*> result;
-    if (sizeBuffer != LENGTH_TICKET) {
-        result.errorCode = Error::Message_InvalidBytes;
-        return result;
+std::tuple<Error::Code, std::unique_ptr<Ticket>> Ticket::parseBytes(const Array<uint8_t>& data) noexcept {
+    if (data.length() == 2 + LENGTH_TICKET_TOKEN) {
+        std::unique_ptr<Ticket> ticket{ new Ticket{} };
+        ticket->id = ((uint16_t)data[1] << 8U) | data[0];
+        memcpy(ticket->token.get(), data.get() + 2, LENGTH_TICKET_TOKEN);
+        return std::make_tuple(Error::Code::Nil, std::move(ticket));
     }
-    Ticket* ticket = new Ticket();
-    if (ticket == nullptr) {
-        result.errorCode = Error::NotEnoughMemory;
-        return result;
-    }
-    ticket->id = ((uint16_t)buffer[1] << 8U) | buffer[0];
-    memcpy(ticket->token, buffer + 2, 32);
-
-    result.data = ticket;
-    result.errorCode = Error::Nil;
-    return result;
+    return std::make_tuple(
+        Error::buildCode(
+            MessageErr::ID,
+            MessageErr::Func::Ticket_ParseBytes,
+            MessageErr::Reason::Ticket_InvalidTicketSize
+        ),
+        nullptr
+    );
 }
 
-Result<uint8_t*> Ticket::buildBytes(uint16_t id, uint8_t token[32]) noexcept {
-    Result<uint8_t*> result;
-    uint8_t* buffer = new (std::nothrow) uint8_t[LENGTH_TICKET];
-    if (buffer == nullptr) {
-        result.errorCode = Error::NotEnoughMemory;
-        return result;
+std::tuple<Error::Code, Array<uint8_t>> Ticket::buildBytes(uint16_t id, const Array<uint8_t>& token) noexcept {
+    if (token.length() == LENGTH_TICKET_TOKEN) {
+        uint8_t* buf = new uint8_t[2 + LENGTH_TICKET_TOKEN];
+        buf[0] = (uint8_t)id;
+        buf[1] = (uint8_t)(id >> 8U);
+        memcpy(buf + 2, token.get(), LENGTH_TICKET_TOKEN);
+        return std::make_tuple(Error::Code::Nil, Array<uint8_t>{ buf, 2 + LENGTH_TICKET_TOKEN });
     }
-    buffer[0] = (uint8_t)id;
-    buffer[1] = (uint8_t)(id >> 8U);
-    memcpy(buffer + 2, token, 32);
-
-    result.data = buffer;
-    result.errorCode = Error::Nil;
-    return result;
+    return std::make_tuple(
+        Error::buildCode(
+            MessageErr::ID,
+            MessageErr::Func::Ticket_ParseBytes,
+            MessageErr::Reason::Ticket_InvalidTokenSize
+        ),
+        Array<uint8_t>{}
+    );
 }

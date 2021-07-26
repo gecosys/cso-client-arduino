@@ -1,20 +1,22 @@
-#ifndef _CSO_PROXY_SERVER_KEY_H_
-#define _CSO_PROXY_SERVER_KEY_H_
+#ifndef CSO_PROXY_SERVER_KEY_H
+#define CSO_PROXY_SERVER_KEY_H
 
-#include "utils/bignum.h"
+#include "entity/bigint.h"
 
 // ServerKey is a group of server keys
-class ServerKey {
-public:
-    BigNum gKey;
-    BigNum nKey;
-    BigNum pubKey;
+struct ServerKey {
+    BigInt gKey;
+    BigInt nKey;
+    BigInt pubKey;
 
-public:
     ServerKey() noexcept;
     ServerKey(ServerKey&& other) noexcept;
     ServerKey(const ServerKey& other) = delete;
-    ServerKey(BigNum&& gKey, BigNum&& nKey, BigNum&& pubKey) noexcept;
+    ServerKey(BigInt&& gKey, BigInt&& nKey, BigInt&& pubKey) noexcept;
+    ~ServerKey() noexcept;
+
+    ServerKey& operator=(const ServerKey& other) = default;
+    ServerKey& operator=(ServerKey&& other) noexcept;
 };
 
-#endif // _CSO_PROXY_SERVER_KEY_H_
+#endif // !CSO_PROXY_SERVER_KEY_H

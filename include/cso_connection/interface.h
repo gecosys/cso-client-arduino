@@ -1,15 +1,15 @@
-#ifndef _CSO_CONNECTION_INTERFACE_H_
-#define _CSO_CONNECTION_INTERFACE_H_
+#ifndef CSO_CONNECTION_INTERFACE_H
+#define CSO_CONNECTION_INTERFACE_H
 
-#include "utils/array.h"
-#include "error/error_code.h"
+#include "entity/array.h"
+#include "error/error.h"
 
 class IConnection {
 public:
-    virtual Error::Code connect(const char* host, uint16_t port) = 0;
+    virtual Error::Code connect(const std::string& host, uint16_t port) = 0;
     virtual Error::Code loopListen() = 0;
-    virtual Error::Code sendMessage(uint8_t* data, uint16_t nBytes) = 0;
+    virtual Error::Code sendMessage(const Array<uint8_t>& data) = 0;
     virtual Array<uint8_t> getMessage() = 0;
 };
 
-#endif // _CSO_CONNECTION_INTERFACE_H_
+#endif // !CSO_CONNECTION_INTERFACE_H

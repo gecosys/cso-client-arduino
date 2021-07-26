@@ -1,71 +1,56 @@
 #include <cstring>
+#include "error/error.h"
 #include "message/cipher.h"
 #include "message/define.h"
+#include "error/package/message_err.h"
 
 #define MAX_CONNECTION_NAME_LENGTH 36
 
 Cipher::Cipher() noexcept
- : msgID(-1),
-   msgTag(-1),
-   isFirst(false),
-   isLast(false),
-   isRequest(false),
-   isEncrypted(false),
-   iv(),
-   sign(),
-   authenTag(),
-   sizeData(0),
-   data(nullptr),
-   lenName(0),
-   name(nullptr),
-   msgType() {}
+    : msgID{ 0 },
+      msgTag{ 0 },
+      isFirst{ false },
+      isLast{ false },
+      isRequest{ false },
+      isEncrypted{ false },
+      iv{ LENGTH_IV },
+      authenTag{ LENGTH_AUTHEN_TAG },
+      sign{ LENGTH_SIGN },
+      data{},
+      name{},
+      msgType{} {}
 
 Cipher::Cipher(Cipher&& other) noexcept
- : msgID(other.msgID),
-   msgTag(other.msgTag),
-   isFirst(other.isFirst),
-   isLast(other.isLast),
-   isRequest(other.isRequest),
-   isEncrypted(other.isEncrypted),
-   iv(),
-   sign(),
-   authenTag(),
-   sizeData(other.sizeData),
-   data(nullptr),
-   lenName(other.lenName),
-   name(nullptr),
-   msgType(other.msgType) {
-    memcpy(this->iv, other.iv, LENGTH_IV);
-    memcpy(this->sign, other.sign, LENGTH_SIGN_HMAC);
-    memcpy(this->authenTag, other.authenTag, LENGTH_AUTHEN_TAG);
-    std::swap(this->data, other.data);
-    std::swap(this->name, other.name);
-}
-
-Cipher::~Cipher() noexcept {
-    if (this->name != nullptr) {
-        delete []this->name;
-    }
-    if (this->data != nullptr) {
-        delete []this->data;
-    }
+    : msgID{ std::move(other.msgID) },
+      msgTag{ std::move(other.msgTag) },
+      isFirst{ std::move(other.isFirst) },
+      isLast{ std::move(other.isLast) },
+      isRequest{ std::move(other.isRequest) },
+      isEncrypted{ std::move(other.isEncrypted) },
+      iv{},
+      authenTag{},
+      sign{},
+      data{ std::move(other.data) },
+      name{ std::move(other.name) },
+      msgType{ std::move(other.msgType) } {
+    std::swap(this->iv, other.iv);
+    std::swap(this->authenTag, other.authenTag);
+    std::swap(this->sign, other.sign);
 }
 
 Cipher& Cipher::operator=(Cipher&& other) noexcept {
-    this->msgID = other.msgID;
-    this->msgTag = other.msgTag;
-    this->isFirst = other.isFirst;
-    this->isLast = other.isLast;
-    this->isRequest = other.isRequest;
-    this->isEncrypted = other.isEncrypted;
-    this->sizeData = other.sizeData;
-    this->lenName = other.lenName;
-    this->msgType = other.msgType;
-    memcpy(this->iv, other.iv, LENGTH_IV);
-    memcpy(this->sign, other.sign, LENGTH_SIGN_HMAC);
-    memcpy(this->authenTag, other.authenTag, LENGTH_AUTHEN_TAG);
-    std::swap(this->data, other.data);
-    std::swap(this->name, other.name);
+    this->msgID = std::move(other.msgID);
+    this->msgTag = std::move(other.msgTag);
+    this->isFirst = std::move(other.isFirst);
+    this->isLast = std::move(other.isLast);
+    this->isRequest = std::move(other.isRequest);
+    this->isEncrypted = std::move(other.isEncrypted);
+    this->msgType = std::move(other.msgType);
+    this->iv = std::move(other.iv);
+    this->authenTag = std::move(other.authenTag);
+    this->sign = std::move(other.sign);
+    this->data = std::move(other.data);
+    this->name = std::move(other.name);
     return *this;
 }
 
@@ -97,124 +82,142 @@ void Cipher::setIsEncrypted(bool isEncrypted) noexcept {
     this->isEncrypted = isEncrypted;
 }
 
-void Cipher::setIV(uint8_t iv[LENGTH_IV]) noexcept {
-    memcpy(this->iv, iv, LENGTH_IV);
-}
-
-void Cipher::setSign(uint8_t sign[LENGTH_SIGN_HMAC]) noexcept {
-    memcpy(this->sign, sign, LENGTH_SIGN_HMAC);
-}
-
-void Cipher::setAuthenTag(uint8_t authenTag[LENGTH_AUTHEN_TAG]) noexcept {
-    memcpy(this->authenTag, authenTag, LENGTH_AUTHEN_TAG);
-}
-
-void Cipher::setName(char* name, uint8_t lenName) noexcept {
-    this->lenName = lenName;
-    if (this->name != nullptr) {
-        delete []this->name;
+Error::Code Cipher::setIV(const Array<uint8_t>& iv) noexcept {
+    if (iv.length() == LENGTH_IV) {
+        this->iv = iv;
+        return Error::Code::Nil;
     }
+    return Error::buildCode(
+        MessageErr::ID,
+        MessageErr::Func::Cipher_SetIV,
+        MessageErr::Reason::Cipher_InvalidIVLen
+    );
+}
+
+Error::Code Cipher::setAuthenTag(const Array<uint8_t>& authenTag) noexcept {
+    if (authenTag.length() == LENGTH_AUTHEN_TAG) {
+        this->authenTag = authenTag;
+        return Error::Code::Nil;
+    }
+    return Error::buildCode(
+        MessageErr::ID,
+        MessageErr::Func::Cipher_SetAuthenTag,
+        MessageErr::Reason::Cipher_InvalidAuthenTagLen
+    );
+}
+
+Error::Code Cipher::setSign(const Array<uint8_t>& sign) noexcept {
+    if (sign.length() == LENGTH_SIGN) {
+        this->sign = sign;
+        return Error::Code::Nil;
+    }
+    return Error::buildCode(
+        MessageErr::ID,
+        MessageErr::Func::Cipher_SetSign,
+        MessageErr::Reason::Cipher_InvalidSignLen
+    );
+}
+
+void Cipher::setName(const std::string& name) {
     this->name = name;
 }
 
-void Cipher::setData(uint8_t* data, uint16_t sizeData) noexcept {
-    this->sizeData = sizeData;
-    if (this->data != nullptr) {
-        delete []this->data;
-    }
+void Cipher::setName(std::string&& name) noexcept {
+    this->name = name;
+}
+
+void Cipher::setData(const Array<uint8_t>& data) {
     this->data = data;
 }
 
+void Cipher::setData(Array<uint8_t>&& data) noexcept {
+    this->data = data;
+}
 
-uint64_t Cipher::getMsgID() noexcept {
+uint64_t Cipher::getMsgID() const noexcept {
     return this->msgID;
 }
 
-uint64_t Cipher::getMsgTag() noexcept {
+uint64_t Cipher::getMsgTag() const noexcept {
     return this->msgTag;
 }
 
-MessageType Cipher::getMsgType() noexcept {
+MessageType Cipher::getMsgType() const noexcept {
     return this->msgType;
 }
 
-bool Cipher::getIsFirst() noexcept {
+bool Cipher::getIsFirst() const noexcept {
     return this->isFirst;
 }
 
-bool Cipher::getIsLast() noexcept {
+bool Cipher::getIsLast() const noexcept {
     return this->isLast;
 }
 
-bool Cipher::getIsRequest() noexcept {
+bool Cipher::getIsRequest() const noexcept {
     return this->isRequest;
 }
 
-bool Cipher::getIsEncrypted() noexcept {
+bool Cipher::getIsEncrypted() const noexcept {
     return this->isEncrypted;
 }
 
-uint8_t* Cipher::getIV() noexcept {
+const Array<uint8_t>& Cipher::getIV() const noexcept {
     return this->iv;
 }
 
-uint8_t* Cipher::getSign() noexcept {
-    return this->sign;
-}
-
-uint8_t* Cipher::getAuthenTag() noexcept {
+const Array<uint8_t>& Cipher::getAuthenTag() const noexcept {
     return this->authenTag;
 }
 
-char* Cipher::getName() noexcept {
+const Array<uint8_t>& Cipher::getSign() const noexcept {
+    return this->sign;
+}
+
+const std::string& Cipher::getName() const noexcept {
     return this->name;
 }
 
-uint8_t Cipher::getLengthName() noexcept {
-    return this->lenName;
-}
-
-uint8_t* Cipher::getData() noexcept {
+const Array<uint8_t>& Cipher::getData() const noexcept {
     return this->data;
 }
 
-uint16_t Cipher::getSizeData() noexcept {
-    return this->sizeData;
-}
-
-Result<Array<uint8_t>> Cipher::intoBytes() noexcept {
+std::tuple<Error::Code, Array<uint8_t>> Cipher::intoBytes() {
     if (this->isEncrypted) {
-        return Cipher::buildCipherBytes(
+        // Build cipher bytes
+        Cipher::buildBytes(
             this->msgID,
             this->msgTag,
             this->msgType,
+            true,
             this->isFirst,
             this->isLast,
             this->isRequest,
             this->name,
-            this->lenName,
             this->iv,
-            this->data,
-            this->sizeData,
-            this->authenTag
+            this->authenTag,
+            Array<uint8_t>{},
+            this->data
         );
     }
-    return Cipher::buildNoCipherBytes(
-            this->msgID,
-            this->msgTag,
-            this->msgType,
-            this->isFirst,
-            this->isLast,
-            this->isRequest,
-            this->name,
-            this->lenName,
-            this->data,
-            this->sizeData,
-            this->sign
-        );
+    // Build no cipher bytes
+    return Cipher::buildBytes(
+        this->msgID,
+        this->msgTag,
+        this->msgType,
+        false,
+        this->isFirst,
+        this->isLast,
+        this->isRequest,
+        this->name,
+        Array<uint8_t>{},
+        Array<uint8_t>{},
+        this->sign,
+        this->data
+    );
 }
 
-Result<Array<uint8_t>> Cipher::getRawBytes() noexcept {
+std::tuple<Error::Code, Array<uint8_t>> Cipher::getRawBytes() {
     return Cipher::buildRawBytes(
         this->msgID,
         this->msgTag,
@@ -224,13 +227,11 @@ Result<Array<uint8_t>> Cipher::getRawBytes() noexcept {
         this->isLast,
         this->isRequest,
         this->name,
-        this->lenName,
-        this->data,
-        this->sizeData
+        this->data
     );
 }
 
-Result<Array<uint8_t>> Cipher::getAad() noexcept {
+std::tuple<Error::Code, Array<uint8_t>> Cipher::getAad() {
     return Cipher::buildAad(
         this->msgID,
         this->msgTag,
@@ -239,8 +240,7 @@ Result<Array<uint8_t>> Cipher::getAad() noexcept {
         this->isFirst,
         this->isLast,
         this->isRequest,
-        this->name,
-        this->lenName
+        this->name
     );
 }
 
@@ -254,24 +254,29 @@ Result<Array<uint8_t>> Cipher::getAad() noexcept {
 // Sign: if encrypted is false then 32 bytes (HMAC-SHA256), otherwise 0 byte
 // Name: nName bytes
 // Data: remaining bytes
-Result<std::unique_ptr<Cipher>> Cipher::parseBytes(uint8_t* buffer, uint16_t sizeBuffer) noexcept {
-    Result<std::unique_ptr<Cipher>> result;
+std::tuple<Error::Code, std::unique_ptr<Cipher>> Cipher::parseBytes(const  Array<uint8_t>& buffer) {
     uint8_t fixedLen = 10;
     uint8_t posAuthenTag = 10;
-    if (sizeBuffer < fixedLen) {
-        result.errorCode = Error::Message_InvalidBytes;
-        return result;
+    if (buffer.length() < fixedLen) {
+        return std::make_tuple(
+            Error::buildCode(
+                MessageErr::ID,
+                MessageErr::Func::Cipher_ParseBytes,
+                MessageErr::Reason::Cipher_InvalidBufferSize
+            ),
+            nullptr
+        );
     }
 
     uint8_t flag = buffer[8];
     bool isEncrypted = (flag & 0x80U) != 0;
-    uint64_t msgID = ((uint64_t)buffer[7] << 56U) | 
-                     ((uint64_t)buffer[6] << 48U) | 
-                     ((uint64_t)buffer[5] << 40U) | 
-                     ((uint64_t)buffer[4] << 32U) | 
-                     ((uint64_t)buffer[3] << 24U) | 
-                     ((uint64_t)buffer[2] << 16U) | 
-                     ((uint64_t)buffer[1] << 8U) | 
+    uint64_t msgID = ((uint64_t)buffer[7] << 56U) |
+                     ((uint64_t)buffer[6] << 48U) |
+                     ((uint64_t)buffer[5] << 40U) |
+                     ((uint64_t)buffer[4] << 32U) |
+                     ((uint64_t)buffer[3] << 24U) |
+                     ((uint64_t)buffer[2] << 16U) |
+                     ((uint64_t)buffer[1] << 8U) |
                      (uint64_t)buffer[0];
 
     uint8_t lenName = buffer[9];
@@ -279,17 +284,23 @@ Result<std::unique_ptr<Cipher>> Cipher::parseBytes(uint8_t* buffer, uint16_t siz
     if ((flag & 0x08U) != 0) {
         fixedLen += 8;
         posAuthenTag += 8;
-        if (sizeBuffer < fixedLen) {
-            result.errorCode = Error::Message_InvalidBytes;
-            return result;
+        if (buffer.length() < fixedLen) {
+            return std::make_tuple(
+                Error::buildCode(
+                    MessageErr::ID,
+                    MessageErr::Func::Cipher_ParseBytes,
+                    MessageErr::Reason::Cipher_InvalidBufferSize
+                ),
+                nullptr
+            );
         }
-        msgTag = ((uint64_t)buffer[17] << 56U) | 
-                 ((uint64_t)buffer[16] << 48U) | 
-                 ((uint64_t)buffer[15] << 40U) | 
-                 ((uint64_t)buffer[14] << 32U) | 
-                 ((uint64_t)buffer[13] << 24U) | 
-                 ((uint64_t)buffer[12] << 16U) | 
-                 ((uint64_t)buffer[11] << 8U) | 
+        msgTag = ((uint64_t)buffer[17] << 56U) |
+                 ((uint64_t)buffer[16] << 48U) |
+                 ((uint64_t)buffer[15] << 40U) |
+                 ((uint64_t)buffer[14] << 32U) |
+                 ((uint64_t)buffer[13] << 24U) |
+                 ((uint64_t)buffer[12] << 16U) |
+                 ((uint64_t)buffer[11] << 8U) |
                  (uint64_t)buffer[10];
     }
 
@@ -297,59 +308,27 @@ Result<std::unique_ptr<Cipher>> Cipher::parseBytes(uint8_t* buffer, uint16_t siz
         fixedLen += LENGTH_AUTHEN_TAG + LENGTH_IV;
     }
     if (lenName == 0 || lenName > MAX_CONNECTION_NAME_LENGTH) {
-		result.errorCode = Error::Message_InvalidConnectionName;
-        return result;
-	}
-    if (sizeBuffer < fixedLen + lenName) {
-		result.errorCode = Error::Message_InvalidBytes;
-        return result;
-	}
-
-    // Parse AUTHEN_TAG, IV
-    uint8_t iv[LENGTH_IV];
-    uint8_t sign[LENGTH_SIGN_HMAC];
-    uint8_t authenTag[LENGTH_AUTHEN_TAG];
-    if (isEncrypted) {
-        uint8_t posIV = posAuthenTag + LENGTH_AUTHEN_TAG;
-        memcpy(authenTag, buffer + posAuthenTag, LENGTH_AUTHEN_TAG);
-		memcpy(iv, buffer+posIV, LENGTH_IV);
-    } else {
-        uint8_t posSign = fixedLen;
-        fixedLen += LENGTH_SIGN_HMAC;
-        if (sizeBuffer < fixedLen + lenName) {
-            result.errorCode = Error::Message_InvalidBytes;
-            return result;
-        }
-        memcpy(sign, buffer + posSign, LENGTH_SIGN_HMAC);
+        return std::make_tuple(
+            Error::buildCode(
+                MessageErr::ID,
+                MessageErr::Func::Cipher_ParseBytes,
+                MessageErr::Reason::Cipher_InvalidNameLen
+            ),
+            nullptr
+        );
+    }
+    if (buffer.length() < (size_t)fixedLen + (size_t)lenName) {
+        return std::make_tuple(
+            Error::buildCode(
+                MessageErr::ID,
+                MessageErr::Func::Cipher_ParseBytes,
+                MessageErr::Reason::Cipher_InvalidBufferSize
+            ),
+            nullptr
+        );
     }
 
-    // Parse name
-    uint8_t posData = fixedLen + lenName;
-    char* name = new (std::nothrow) char[lenName + 1];
-    if (name == nullptr) {
-        result.errorCode = Error::NotEnoughMemory;
-        return result;
-    }
-    name[lenName] = '\0';
-    memcpy(name, buffer + fixedLen, lenName);
-
-    // Parse data
-    uint8_t* data = nullptr;
-    uint16_t sizeData = sizeBuffer - posData;
-    if (sizeData > 0) {
-		data = new (std::nothrow) uint8_t[sizeData];
-        if (data == nullptr) {
-            result.errorCode = Error::NotEnoughMemory;
-            return result;
-        }
-		memcpy(data, buffer + posData, sizeData);
-	}
-
-    Cipher* cipher = new Cipher();
-    if (cipher == nullptr) {
-        result.errorCode = Error::NotEnoughMemory;
-        return result;
-    }
+    std::unique_ptr<Cipher> cipher{ new Cipher() };
     cipher->msgID = msgID;
     cipher->msgTag = msgTag;
     cipher->msgType = (MessageType)(flag & 0x07U);
@@ -357,25 +336,55 @@ Result<std::unique_ptr<Cipher>> Cipher::parseBytes(uint8_t* buffer, uint16_t siz
     cipher->isLast = (flag & 0x20U) != 0;
     cipher->isRequest = (flag & 0x10U) != 0;
     cipher->isEncrypted = isEncrypted;
-    memcpy(cipher->iv, iv, LENGTH_IV);
-    memcpy(cipher->sign, sign, LENGTH_SIGN_HMAC);
-    memcpy(cipher->authenTag, authenTag, LENGTH_AUTHEN_TAG);
-    cipher->sizeData = sizeData;
-    cipher->data = data;
-    cipher->lenName = lenName;
-    cipher->name = name;
 
-    result.data.reset(cipher);
-    result.errorCode = Error::Nil;
-    return result;
+    // Parse AUTHEN_TAG, IV
+    if (isEncrypted) {
+        uint8_t posIV = posAuthenTag + LENGTH_AUTHEN_TAG;
+        memcpy(cipher->authenTag.get(), buffer.get() + posAuthenTag, LENGTH_AUTHEN_TAG);
+        memcpy(cipher->iv.get(), buffer.get() + posIV, LENGTH_IV);
+    }
+    else {
+        uint8_t posSign = fixedLen;
+        fixedLen += LENGTH_SIGN;
+        if (buffer.length() < (size_t)fixedLen + (size_t)lenName) {
+            return std::make_tuple(
+                Error::buildCode(
+                    MessageErr::ID,
+                    MessageErr::Func::Cipher_ParseBytes,
+                    MessageErr::Reason::Cipher_InvalidBufferSize
+                ),
+                nullptr
+            );
+        }
+        memcpy(cipher->sign.get(), buffer.get() + posSign, LENGTH_SIGN);
+    }
+
+    // Parse name
+    uint8_t posData = fixedLen + lenName;
+    cipher->name = std::string{ (char*)buffer.get() + fixedLen, lenName };
+
+    // Parse data
+    uint16_t sizeData = buffer.length() - posData;
+    if (sizeData > 0) {
+        cipher->data.reset(sizeData);
+        memcpy(cipher->data.get(), buffer.get() + posData, sizeData);
+    }
+
+    return std::make_tuple(Error::Code::Nil, std::move(cipher));
 }
 
-Result<Array<uint8_t>> Cipher::buildRawBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName, uint8_t* data, uint16_t sizeData) noexcept {
-    Result<Array<uint8_t>> result;
+std::tuple<Error::Code, Array<uint8_t>> Cipher::buildRawBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const std::string& name, const Array<uint8_t>& data) {
+    uint8_t lenName = name.length();
     if (lenName == 0 || lenName > MAX_CONNECTION_NAME_LENGTH) {
-		result.errorCode = Error::Message_InvalidConnectionName;
-        return result;
-	}
+        return std::make_tuple(
+            Error::buildCode(
+                MessageErr::ID,
+                MessageErr::Func::Cipher_BuildRawBytes,
+                MessageErr::Reason::Cipher_InvalidNameLen
+            ),
+            Array<uint8_t>{}
+        );
+    }
 
     uint8_t bEncrypted = isEncrypted ? 1 : 0;
     uint8_t bFirst = isFirst ? 1 : 0;
@@ -388,116 +397,55 @@ Result<Array<uint8_t>> Cipher::buildRawBytes(uint64_t msgID, uint64_t msgTag, Me
         fixedLen += 8;
     }
 
-    uint8_t* buffer = new (std::nothrow) uint8_t[fixedLen + lenName + sizeData];
-    if (buffer == nullptr) {
-        result.errorCode = Error::NotEnoughMemory;
-        return result;
-    }
+    Array<uint8_t> buffer{ fixedLen + lenName + data.length() };
     buffer[0] = (uint8_t)msgID;
-	buffer[1] = (uint8_t)(msgID >> 8U);
-	buffer[2] = (uint8_t)(msgID >> 16U);
-	buffer[3] = (uint8_t)(msgID >> 24U);
-	buffer[4] = (uint8_t)(msgID >> 32U);
-	buffer[5] = (uint8_t)(msgID >> 40U);
-	buffer[6] = (uint8_t)(msgID >> 48U);
-	buffer[7] = (uint8_t)(msgID >> 56U);
-	buffer[8] = (uint8_t)(bEncrypted << 7U | bFirst << 6U | bLast << 5U | bRequest << 4U | bUseTag << 3U | uint8_t(msgType));
-	buffer[9] = lenName;
+    buffer[1] = (uint8_t)(msgID >> 8U);
+    buffer[2] = (uint8_t)(msgID >> 16U);
+    buffer[3] = (uint8_t)(msgID >> 24U);
+    buffer[4] = (uint8_t)(msgID >> 32U);
+    buffer[5] = (uint8_t)(msgID >> 40U);
+    buffer[6] = (uint8_t)(msgID >> 48U);
+    buffer[7] = (uint8_t)(msgID >> 56U);
+    buffer[8] = (uint8_t)(bEncrypted << 7U | bFirst << 6U | bLast << 5U | bRequest << 4U | bUseTag << 3U | uint8_t(msgType));
+    buffer[9] = lenName;
     if (msgTag > 0) {
         buffer[10] = (uint8_t)msgTag;
-		buffer[11] = (uint8_t)(msgTag >> 8U);
-		buffer[12] = (uint8_t)(msgTag >> 16U);
-		buffer[13] = (uint8_t)(msgTag >> 24U);
-		buffer[14] = (uint8_t)(msgTag >> 32U);
-		buffer[15] = (uint8_t)(msgTag >> 40u);
-		buffer[16] = (uint8_t)(msgTag >> 48U);
-		buffer[17] = (uint8_t)(msgTag >> 56U);
+        buffer[11] = (uint8_t)(msgTag >> 8U);
+        buffer[12] = (uint8_t)(msgTag >> 16U);
+        buffer[13] = (uint8_t)(msgTag >> 24U);
+        buffer[14] = (uint8_t)(msgTag >> 32U);
+        buffer[15] = (uint8_t)(msgTag >> 40u);
+        buffer[16] = (uint8_t)(msgTag >> 48U);
+        buffer[17] = (uint8_t)(msgTag >> 56U);
     }
-    memcpy(buffer + fixedLen, name, lenName);
-    if (sizeData > 0) {
-		memcpy(buffer + fixedLen+ lenName, data, sizeData);
-	}
+    memcpy(buffer.get() + fixedLen, name.c_str(), lenName);
+    if (data.length() > 0) {
+        memcpy(buffer.get() + fixedLen + lenName, data.get(), data.length());
+    }
 
-    result.errorCode = Error::Nil;
-    result.data.buffer.reset(buffer);
-    result.data.length = fixedLen + lenName + sizeData;
-    return result;
+    return std::make_tuple(Error::Code::Nil, std::move(buffer));
 }
 
-Result<Array<uint8_t>> Cipher::buildAad(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName) noexcept {
-    Result<Array<uint8_t>> result;
+std::tuple<Error::Code, Array<uint8_t>> Cipher::buildAad(
+        uint64_t msgID,
+        uint64_t msgTag,
+        MessageType msgType,
+        bool isEncrypted,
+        bool isFirst,
+        bool isLast,
+        bool isRequest,
+        const std::string& name) {
+    uint8_t lenName = name.length();
+
     if (lenName == 0 || lenName > MAX_CONNECTION_NAME_LENGTH) {
-        result.errorCode = Error::Message_InvalidConnectionName;
-        return result;
-	}
-
-    uint8_t bEncrypted = isEncrypted ? 1 : 0;
-    uint8_t bFirst = isFirst ? 1 : 0;
-    uint8_t bLast = isLast ? 1 : 0;
-    uint8_t bRequest = isRequest ? 1 : 0;
-    uint8_t bUseTag = 0;
-    uint8_t fixedLen = 10;
-    if (msgTag > 0) {
-        bUseTag = 1;
-        fixedLen += 8;
-    }
-
-    uint8_t* buffer = new (std::nothrow) uint8_t[fixedLen + lenName];
-    if (buffer == nullptr) {
-        result.errorCode = Error::NotEnoughMemory;
-        return result;
-    }
-	buffer[0] = (uint8_t)msgID;
-	buffer[1] = (uint8_t)(msgID >> 8U);
-	buffer[2] = (uint8_t)(msgID >> 16U);
-	buffer[3] = (uint8_t)(msgID >> 24U);
-	buffer[4] = (uint8_t)(msgID >> 32U);
-	buffer[5] = (uint8_t)(msgID >> 40U);
-	buffer[6] = (uint8_t)(msgID >> 48U);
-	buffer[7] = (uint8_t)(msgID >> 56U);
-	buffer[8] = (uint8_t)(bEncrypted << 7U | bFirst << 6U | bLast << 5U | bRequest << 4U | bUseTag << 3U | (uint8_t)msgType);
-	buffer[9] = lenName;
-	if (msgTag > 0) {
-		buffer[10] = (uint8_t)msgTag;
-		buffer[11] = (uint8_t)(msgTag >> 8U);
-		buffer[12] = (uint8_t)(msgTag >> 16U);
-		buffer[13] = (uint8_t)(msgTag >> 24U);
-		buffer[14] = (uint8_t)(msgTag >> 32U);
-		buffer[15] = (uint8_t)(msgTag >> 40U);
-		buffer[16] = (uint8_t)(msgTag >> 48U);
-		buffer[17] = (uint8_t)(msgTag >> 56U);
-	}
-	memcpy(buffer + fixedLen, name, lenName);
-
-    result.errorCode = Error::Nil;
-    result.data.buffer.reset(buffer);
-    result.data.length = fixedLen + lenName;
-    return result;
-}
-
-Result<Array<uint8_t>> Cipher::buildCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t* data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG]) noexcept {
-    return Cipher::buildBytes(msgID, msgTag, msgType, true, isFirst, isLast, isRequest, name, lenName, iv, data, sizeData, authenTag, nullptr);
-}
-
-Result<Array<uint8_t>> Cipher::buildNoCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName, uint8_t* data, uint16_t sizeData, uint8_t sign[LENGTH_SIGN_HMAC]) noexcept {
-    return Cipher::buildBytes(msgID, msgTag, msgType, false, isFirst, isLast, isRequest, name, lenName, nullptr, data, sizeData, nullptr, sign);
-}
-
-Result<Array<uint8_t>> Cipher::buildBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const char* name, uint8_t lenName, uint8_t iv[LENGTH_IV], uint8_t* data, uint16_t sizeData, uint8_t authenTag[LENGTH_AUTHEN_TAG], uint8_t sign[LENGTH_SIGN_HMAC]) noexcept {
-    Result<Array<uint8_t>> result;
-    if (lenName == 0 || lenName > MAX_CONNECTION_NAME_LENGTH) {
-        result.errorCode = Error::Message_InvalidConnectionName;
-        return result;
-	}
-
-    uint8_t lenIV = 0;
-    uint8_t lenSign = 0;
-    uint8_t lenAuthenTag = 0;
-    if (isEncrypted) {
-        lenIV = LENGTH_IV;
-        lenAuthenTag = LENGTH_AUTHEN_TAG;
-    } else {
-        lenSign = LENGTH_SIGN_HMAC;
+        return std::make_tuple(
+            Error::buildCode(
+                MessageErr::ID,
+                MessageErr::Func::Cipher_BuildAad,
+                MessageErr::Reason::Cipher_InvalidNameLen
+            ),
+            Array<uint8_t>{}
+        );
     }
 
     uint8_t bEncrypted = isEncrypted ? 1 : 0;
@@ -511,49 +459,172 @@ Result<Array<uint8_t>> Cipher::buildBytes(uint64_t msgID, uint64_t msgTag, Messa
         fixedLen += 8;
     }
 
-    uint16_t lenBuffer = fixedLen + lenAuthenTag + lenIV + lenSign + lenName + sizeData;
-    uint8_t* buffer = new (std::nothrow) uint8_t[lenBuffer];
-    if (buffer == nullptr) {
-        result.errorCode = Error::NotEnoughMemory;
-        return result;
-    }
+    Array<uint8_t> buffer{ fixedLen + lenName };
     buffer[0] = (uint8_t)msgID;
-	buffer[1] = (uint8_t)(msgID >> 8U);
-	buffer[2] = (uint8_t)(msgID >> 16U);
-	buffer[3] = (uint8_t)(msgID >> 24U);
-	buffer[4] = (uint8_t)(msgID >> 32U);
-	buffer[5] = (uint8_t)(msgID >> 40U);
-	buffer[6] = (uint8_t)(msgID >> 48U);
-	buffer[7] = (uint8_t)(msgID >> 56U);
-	buffer[8] = (uint8_t)(bEncrypted << 7U | bFirst << 6U | bLast << 5U | bRequest << 4U | bUseTag << 3U | (uint8_t)msgType);
-	buffer[9] = lenName;
-	if (msgTag > 0) {
-		buffer[10] = (uint8_t)msgTag;
-		buffer[11] = (uint8_t)(msgTag >> 8U);
-		buffer[12] = (uint8_t)(msgTag >> 16U);
-		buffer[13] = (uint8_t)(msgTag >> 24U);
-		buffer[14] = (uint8_t)(msgTag >> 32U);
-		buffer[15] = (uint8_t)(msgTag >> 40U);
-		buffer[16] = (uint8_t)(msgTag >> 48U);
-		buffer[17] = (uint8_t)(msgTag >> 56U);
-	}
-    uint8_t posData = fixedLen + lenAuthenTag;
-	if (isEncrypted) {
-		memcpy(buffer + fixedLen, authenTag, lenAuthenTag);
-		memcpy(buffer + posData, iv, lenIV);
-		posData += lenIV;
-	} else {
-		memcpy(buffer + fixedLen, sign, lenSign);
-		posData += lenSign;
-	}
-	memcpy(buffer + posData, name, lenName);
-	posData += lenName;
-	if (sizeData > 0) {
-		memcpy(buffer + posData, data, sizeData);
-	}
+    buffer[1] = (uint8_t)(msgID >> 8U);
+    buffer[2] = (uint8_t)(msgID >> 16U);
+    buffer[3] = (uint8_t)(msgID >> 24U);
+    buffer[4] = (uint8_t)(msgID >> 32U);
+    buffer[5] = (uint8_t)(msgID >> 40U);
+    buffer[6] = (uint8_t)(msgID >> 48U);
+    buffer[7] = (uint8_t)(msgID >> 56U);
+    buffer[8] = (uint8_t)(bEncrypted << 7U | bFirst << 6U | bLast << 5U | bRequest << 4U | bUseTag << 3U | (uint8_t)msgType);
+    buffer[9] = lenName;
+    if (msgTag > 0) {
+        buffer[10] = (uint8_t)msgTag;
+        buffer[11] = (uint8_t)(msgTag >> 8U);
+        buffer[12] = (uint8_t)(msgTag >> 16U);
+        buffer[13] = (uint8_t)(msgTag >> 24U);
+        buffer[14] = (uint8_t)(msgTag >> 32U);
+        buffer[15] = (uint8_t)(msgTag >> 40U);
+        buffer[16] = (uint8_t)(msgTag >> 48U);
+        buffer[17] = (uint8_t)(msgTag >> 56U);
+    }
+    memcpy(buffer.get() + fixedLen, name.c_str(), lenName);
 
-    result.errorCode = Error::Nil;
-    result.data.buffer.reset(buffer);
-    result.data.length = lenBuffer;
-    return result;
+    return std::make_tuple(Error::Code::Nil, std::move(buffer));
+}
+
+std::tuple<Error::Code, Array<uint8_t>> Cipher::buildCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const std::string& name, const Array<uint8_t>& iv, const Array<uint8_t>& authenTag, const Array<uint8_t>& data) {
+    int32_t errcode;
+
+    if (iv.length() != LENGTH_IV) {
+        errcode = MessageErr::Reason::Cipher_InvalidIVLen;
+        goto handleError;
+    }
+
+    if (authenTag.length() != LENGTH_AUTHEN_TAG) {
+        errcode = MessageErr::Reason::Cipher_InvalidAuthenTagLen;
+        goto handleError;
+    }
+
+    if (name.length() == 0 || name.length() > MAX_CONNECTION_NAME_LENGTH) {
+        errcode = MessageErr::Reason::Cipher_InvalidNameLen;
+        goto handleError;
+    }
+
+    return Cipher::buildBytes(
+        msgID,
+        msgTag,
+        msgType,
+        true,
+        isFirst,
+        isLast,
+        isRequest,
+        name,
+        iv,
+        authenTag,
+        Array<uint8_t>{},
+        data
+    );
+
+handleError:
+    return std::make_tuple(
+        Error::buildCode(
+            MessageErr::ID,
+            MessageErr::Func::Cipher_BuildCipherBytes,
+            errcode
+        ),
+        Array<uint8_t>{}
+    );
+}
+
+std::tuple<Error::Code, Array<uint8_t>> Cipher::buildNoCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const std::string& name, const Array<uint8_t>& sign, const Array<uint8_t>& data) {
+    int32_t errcode;
+
+    if (sign.length() != LENGTH_SIGN) {
+        errcode = MessageErr::Reason::Cipher_InvalidSignLen;
+        goto handleError;
+    }
+
+    if (name.length() == 0 || name.length() > MAX_CONNECTION_NAME_LENGTH) {
+        errcode = MessageErr::Reason::Cipher_InvalidNameLen;
+        goto handleError;
+    }
+
+    return Cipher::buildBytes(
+        msgID,
+        msgTag,
+        msgType,
+        false,
+        isFirst,
+        isLast,
+        isRequest,
+        name,
+        Array<uint8_t>{},
+        Array<uint8_t>{},
+        sign,
+        data
+    );
+
+handleError:
+    return std::make_tuple(
+        Error::buildCode(
+            MessageErr::ID,
+            MessageErr::Func::Cipher_BuildNoCipherBytes,
+            errcode
+        ),
+        Array<uint8_t>{}
+    );
+}
+
+std::tuple<Error::Code, Array<uint8_t>> Cipher::buildBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const std::string& name, const Array<uint8_t>& iv, const Array<uint8_t>& authenTag, const Array<uint8_t>& sign, const Array<uint8_t>& data) {
+    uint8_t lenName = name.length();
+    uint8_t bEncrypted = isEncrypted ? 1 : 0;
+    uint8_t bFirst = isFirst ? 1 : 0;
+    uint8_t bLast = isLast ? 1 : 0;
+    uint8_t bRequest = isRequest ? 1 : 0;
+    uint8_t bUseTag = 0;
+    uint8_t fixedLen = 10;
+    if (msgTag > 0) {
+        bUseTag = 1;
+        fixedLen += 8;
+    }
+
+    uint16_t lenBuffer = fixedLen + lenName + data.length();
+    if (isEncrypted) {
+        lenBuffer += (LENGTH_IV + LENGTH_AUTHEN_TAG);
+    }
+    else {
+        lenBuffer += LENGTH_SIGN;
+    }
+
+    uint8_t* buffer = new uint8_t[lenBuffer];
+    buffer[0] = (uint8_t)msgID;
+    buffer[1] = (uint8_t)(msgID >> 8U);
+    buffer[2] = (uint8_t)(msgID >> 16U);
+    buffer[3] = (uint8_t)(msgID >> 24U);
+    buffer[4] = (uint8_t)(msgID >> 32U);
+    buffer[5] = (uint8_t)(msgID >> 40U);
+    buffer[6] = (uint8_t)(msgID >> 48U);
+    buffer[7] = (uint8_t)(msgID >> 56U);
+    buffer[8] = (uint8_t)(bEncrypted << 7U | bFirst << 6U | bLast << 5U | bRequest << 4U | bUseTag << 3U | (uint8_t)msgType);
+    buffer[9] = lenName;
+    if (msgTag > 0) {
+        buffer[10] = (uint8_t)msgTag;
+        buffer[11] = (uint8_t)(msgTag >> 8U);
+        buffer[12] = (uint8_t)(msgTag >> 16U);
+        buffer[13] = (uint8_t)(msgTag >> 24U);
+        buffer[14] = (uint8_t)(msgTag >> 32U);
+        buffer[15] = (uint8_t)(msgTag >> 40U);
+        buffer[16] = (uint8_t)(msgTag >> 48U);
+        buffer[17] = (uint8_t)(msgTag >> 56U);
+    }
+    uint8_t posData = fixedLen;
+    if (isEncrypted) {
+        memcpy(buffer + fixedLen, authenTag.get(), LENGTH_AUTHEN_TAG);
+        posData += LENGTH_AUTHEN_TAG;
+        memcpy(buffer + posData, iv.get(), LENGTH_IV);
+        posData += LENGTH_IV;
+    }
+    else {
+        memcpy(buffer + fixedLen, sign.get(), LENGTH_SIGN);
+        posData += LENGTH_SIGN;
+    }
+    memcpy(buffer + posData, name.c_str(), lenName);
+    posData += lenName;
+    if (data.length() > 0) {
+        memcpy(buffer + posData, data.get(), data.length());
+    }
+    return std::make_tuple(Error::Code::Nil, Array<uint8_t>{ buffer, lenBuffer });
 }

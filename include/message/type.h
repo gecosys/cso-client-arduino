@@ -1,15 +1,15 @@
-#ifndef _MESSAGE_TYPE_H_
-#define _MESSAGE_TYPE_H_
+#ifndef MESSAGE_TYPE_H
+#define MESSAGE_TYPE_H
 
 #include <stdint.h>
 
 enum MessageType: uint8_t {
-    Activation   = 0x02U,
-    Single       = 0x03U,
-    Group        = 0x04U,
-    SingleCached = 0x05U,
-    GroupCached  = 0x06U,
-    Done         = 0x07U
+    Activation   = 2U,
+    Single       = 3U,
+    Group        = 4U,
+    SingleCached = 5U,
+    GroupCached  = 6U,
+    Done         = 7U
 };
 
-#endif
+#endif // !MESSAGE_TYPE_H

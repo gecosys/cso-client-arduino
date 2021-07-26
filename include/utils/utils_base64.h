@@ -1,13 +1,13 @@
-#ifndef _UTILS_BASE64_H_
-#define _UTILS_BASE64_H_
+#ifndef UTILS_BASE64_H
+#define UTILS_BASE64_H
 
 #include <string>
-#include "utils/array.h"
+#include "entity/array.h"
 
 class UtilsBase64 {
 public:
-    static std::string encode(const uint8_t* data, size_t lenData);
-    static Array<uint8_t> decode(const char* data, size_t lenData = 0);
+    static std::string encode(const Array<uint8_t>& data);
+    static Array<uint8_t> decode(const std::string& data);
 };
 
-#endif // _UTILS_BASE64_H_
+#endif // !UTILS_BASE64_H

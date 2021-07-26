@@ -3,54 +3,69 @@ extern "C" {
     #include <mbedtls/pem.h>
     #include <mbedtls/sha256.h>
 }
+#include "message/define.h"
 #include "utils/utils_rsa.h"
+#include "error/external.h"
+#include "error/package/utils_err.h"
 
 
-Error::Code UtilsRSA::verifySignature(const uint8_t* publicKey, const uint8_t* sign, uint16_t sizeSign, const uint8_t* data, uint16_t sizeData) {
+std::tuple<Error::Code, bool> UtilsRSA::verifySignature(const std::string& publicKey, const Array<uint8_t>& signature, const Array<uint8_t>& data) {
     uint8_t hashed[32];
-    mbedtls_sha256(data, sizeData, hashed, 0);
-
-    // Parse PEM
     size_t usedLen;
     mbedtls_pem_context pemCtx;
+    mbedtls_pk_context pkCtx;
+
+    // Parse PEM
     mbedtls_pem_init(&pemCtx);
-    auto errorCode = mbedtls_pem_read_buffer(
+    auto errcode = mbedtls_pem_read_buffer(
         &pemCtx,
         "-----BEGIN PUBLIC KEY-----",
         "-----END PUBLIC KEY-----",
-        publicKey,
-        NULL,
+        (const uint8_t*)publicKey.c_str(),
+        nullptr,
         0,
         &usedLen
     );
-    if (errorCode != 0) {
-        mbedtls_pem_free(&pemCtx);
-        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
+    if (errcode != 0) {
+        goto handleError;
     }
 
     // Parse public key
-    mbedtls_pk_context pkCtx;
     mbedtls_pk_init(&pkCtx);
-    errorCode = mbedtls_pk_parse_public_key(&pkCtx, pemCtx.buf, pemCtx.buflen);
-    if (errorCode != 0) {
-        mbedtls_pem_free(&pemCtx);
-        mbedtls_pk_free(&pkCtx);
-        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
+    errcode = mbedtls_pk_parse_public_key(&pkCtx, pemCtx.buf, pemCtx.buflen);
+    if (errcode != 0) {
+        goto handleError;
     }
 
     // Verify hashed data with signature
-    errorCode = mbedtls_pk_verify(
+    mbedtls_sha256(data.get(), data.length(), hashed, 0);
+    errcode = mbedtls_pk_verify(
         &pkCtx,
         MBEDTLS_MD_SHA256,
         hashed,
         32,
-        sign,
-        sizeSign
+        signature.get(),
+        signature.length()
     );
+    if (errcode != 0) {
+        goto handleError;
+    }    
+
     mbedtls_pem_free(&pemCtx);
     mbedtls_pk_free(&pkCtx);
-    if (errorCode != 0) {
-        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
-    }    
-    return Error::Nil;
+    return std::make_tuple(Error::Code::Nil, true);
+
+handleError:
+    mbedtls_pem_free(&pemCtx);
+    mbedtls_pk_free(&pkCtx);
+
+    return std::make_tuple(
+        Error::buildCode(
+            UtilsErr::ID,
+            UtilsErr::Func::RSA_VerifySignature,
+            errcode,
+            External::ID::MbedTLS
+        ),
+        false
+    );
 }

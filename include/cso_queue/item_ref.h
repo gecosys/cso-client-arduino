@@ -1,16 +1,20 @@
+#ifndef CSO_QUEUE_ITEM_REF_H
+#define CSO_QUEUE_ITEM_REF_H
+
+#include <memory>
 #include "item.h"
 
 class ItemQueueRef {
 private:
-    ItemQueue* ptr;
+    std::shared_ptr<ItemQueue> ptr;
 
 public:
     ItemQueueRef() = delete;
-    ItemQueueRef& operator=(const ItemQueueRef& other) = delete;
-
-    ItemQueueRef(ItemQueue* ptr) noexcept;
-    ~ItemQueueRef() noexcept;
+    ItemQueueRef(std::shared_ptr<ItemQueue>&& ptr) noexcept;
+    ~ItemQueueRef() noexcept = default;
 
     bool empty() const noexcept;
     ItemQueue& get() const noexcept;
 };
+
+#endif // !CSO_QUEUE_ITEM_REF_H

@@ -3,66 +3,132 @@ extern "C" {
     #include <mbedtls/aes.h>
 }
 #include <esp_system.h>
+#include "message/define.h"
 #include "utils/utils_aes.h"
+#include "error/external.h"
+#include "error/package/utils_err.h"
 
-
-Error::Code UtilsAES::encrypt(const uint8_t key[32], const uint8_t* input, uint16_t sizeInput, const uint8_t* aad, uint8_t sizeAad, uint8_t outIV[LENGTH_IV], uint8_t outAuthenTag[LENGTH_AUTHEN_TAG], uint8_t* output) {
+std::tuple<Error::Code, Array<uint8_t>, Array<uint8_t>, Array<uint8_t>> UtilsAES::encrypt(const Array<uint8_t>& key, const Array<uint8_t>& input, const Array<uint8_t>& aad) {
+    if (key.length() != LENGTH_KEY) {
+        return std::make_tuple(
+            Error::buildCode(UtilsErr::ID, UtilsErr::Func::AES_Encrypt, UtilsErr::Reason::InvalidKeyLength),
+            Array<uint8_t>{},
+            Array<uint8_t>{},
+            Array<uint8_t>{}
+        );
+    }
+    
+    int32_t errcode;
+    Array<uint8_t> iv;
+    Array<uint8_t> tag;
+    Array<uint8_t> output;
     mbedtls_gcm_context ctx;
-    mbedtls_gcm_init(&ctx);
 
-    auto errorCode = mbedtls_gcm_setkey(&ctx, MBEDTLS_CIPHER_ID_AES , key, 256);
-    if (errorCode != 0) {
-        mbedtls_gcm_free(&ctx);
-        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
+    mbedtls_gcm_init(&ctx);
+    errcode = mbedtls_gcm_setkey(&ctx, MBEDTLS_CIPHER_ID_AES , key.get(), 256);
+    if (errcode != 0) {
+        goto handleError;
     }
 
-    esp_fill_random(outIV, LENGTH_IV);
-    errorCode = mbedtls_gcm_crypt_and_tag(
+    iv.reset(LENGTH_IV);
+    esp_fill_random(iv.get(), LENGTH_IV);
+
+    tag.reset(LENGTH_AUTHEN_TAG);
+    output.reset(input.length());
+
+    errcode = mbedtls_gcm_crypt_and_tag(
         &ctx,
         MBEDTLS_GCM_ENCRYPT,
-        sizeInput,
-        outIV,
+        input.length(),
+        iv.get(),
         LENGTH_IV,
-        aad,
-        sizeAad,
-        input,
-        output,
+        aad.get(),
+        aad.length(),
+        input.get(),
+        output.get(),
         LENGTH_AUTHEN_TAG,
-        outAuthenTag
+        tag.get()
     );
-    mbedtls_gcm_free(&ctx);
-
-    if (errorCode != 0) {
-        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
+    if (errcode != 0) {
+        goto handleError;
     }
-    return Error::Nil;
+
+    mbedtls_gcm_free(&ctx);
+    return std::make_tuple(
+        Error::Code::Nil,
+        std::move(iv),
+        std::move(tag),
+        std::move(output)
+    );
+
+handleError:
+    mbedtls_gcm_free(&ctx);
+    return std::make_tuple(
+        Error::buildCode(
+            UtilsErr::ID, 
+            UtilsErr::Func::AES_Encrypt, 
+            errcode, 
+            External::ID::MbedTLS
+        ),
+        Array<uint8_t>{},
+        Array<uint8_t>{},
+        Array<uint8_t>{}
+    );
 }
 
-Error::Code UtilsAES::decrypt(const uint8_t key[32], const uint8_t* input, uint16_t sizeInput, const uint8_t* aad, uint8_t sizeAad, const uint8_t iv[LENGTH_IV], const uint8_t authenTag[LENGTH_AUTHEN_TAG], uint8_t* output) {
+std::tuple<Error::Code, Array<uint8_t>> UtilsAES::decrypt(const Array<uint8_t>& key, const Array<uint8_t>& input, const Array<uint8_t>& aad, const Array<uint8_t>& iv, const Array<uint8_t>& tag) {
+    if (iv.length() != LENGTH_IV || tag.length() != LENGTH_AUTHEN_TAG) {
+        return std::make_tuple(
+            Error::buildCode(UtilsErr::ID, UtilsErr::Func::AES_Decrypt, UtilsErr::Reason::AES_InvalidInput),
+            Array<uint8_t>{}
+        );
+    }
+    
+    if (key.length() != LENGTH_KEY) {
+        return std::make_tuple(
+            Error::buildCode(UtilsErr::ID, UtilsErr::Func::AES_Decrypt, UtilsErr::Reason::InvalidKeyLength),
+            Array<uint8_t>{}
+        );
+    }
+    
+    Array<uint8_t> output;
     mbedtls_gcm_context ctx;
+
     mbedtls_gcm_init(&ctx);
-
-    auto errorCode = mbedtls_gcm_setkey(&ctx,MBEDTLS_CIPHER_ID_AES , key, 256);
-    if (errorCode != 0) {
-        mbedtls_gcm_free(&ctx);
-        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
+    auto errcode = mbedtls_gcm_setkey(&ctx,MBEDTLS_CIPHER_ID_AES , key.get(), 256);
+    if (errcode != 0) {
+        goto handleError;
     }
 
-    errorCode = mbedtls_gcm_auth_decrypt(
-        &ctx, sizeInput,
-        iv,
+    output.reset(input.length());
+    errcode = mbedtls_gcm_auth_decrypt(
+        &ctx, 
+        input.length(),
+        iv.get(),
         LENGTH_IV,
-        aad,
-        sizeAad,
-        authenTag,
+        aad.get(),
+        aad.length(),
+        tag.get(),
         LENGTH_AUTHEN_TAG,
-        input,
-        output
+        input.get(),
+        output.get()
     );
-    mbedtls_gcm_free(&ctx);
-
-    if (errorCode != 0) {
-        return Error::adaptExternalCode(ExternalTag::MbedTLS, errorCode);
+    if (errcode != 0) {
+        goto handleError;
+    
     }
-    return Error::Nil;
+    mbedtls_gcm_free(&ctx);
+    return std::make_tuple(Error::Code::Nil, output);
+
+handleError:
+    mbedtls_gcm_free(&ctx);
+    return std::make_tuple(
+        Error::buildCode(
+            UtilsErr::ID, 
+            UtilsErr::Func::AES_Decrypt, 
+            errcode, 
+            External::ID::MbedTLS
+        ),
+        Array<uint8_t>{}
+    );
 }

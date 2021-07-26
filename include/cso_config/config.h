@@ -1,5 +1,5 @@
-#ifndef _CONFIG_H_
-#define _CONFIG_H_
+#ifndef CSO_CONFIG_H
+#define CSO_CONFIG_H
 
 #include <memory>
 #include "interface.h"
@@ -13,25 +13,30 @@ private:
     std::string csoAddress;
 
 public:
-    static std::shared_ptr<IConfig> build(const char* projectID, const char* projectToken, const char* connectionName, const char* csoPubKey, const char* csoAddress);
-    static std::shared_ptr<IConfig> build(const char* filePath);
+    static std::unique_ptr<IConfig> build(const std::string& filePath);
+    static std::unique_ptr<IConfig> build(
+        std::string&& projectID,
+        std::string&& projectToken,
+        std::string&& connectionName,
+        std::string&& csoPubKey,
+        std::string&& csoAddress) noexcept;
 
 private:
     Config(
-        const char* projectID, 
-        const char* projectToken, 
-        const char* connectionName, 
-        const char* csoPubKey, 
-        const char* csoAddress
-    ) noexcept;
+        std::string&& projectID,
+        std::string&& projectToken,
+        std::string&& connectionName,
+        std::string&& csoPubKey,
+        std::string&& csoAddress) noexcept;
 
 public:
     Config() = delete;
     Config(Config&& other) = delete;
     Config(const Config& other) = delete;
+    ~Config() noexcept = default;
+
+    Config& operator=(Config&& other) = delete;
     Config& operator=(const Config& other) = delete;
-    
-    ~Config() noexcept;
 
     const std::string& getProjectID() noexcept;
 	const std::string& getProjectToken() noexcept;
@@ -40,4 +45,4 @@ public:
 	const std::string& getCSOAddress() noexcept;
 };
 
-#endif //_CONFIG_H_
+#endif // !CSO_CONFIG_H

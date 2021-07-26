@@ -8,12 +8,10 @@ std::unique_ptr<ICounter> Counter::build(uint64_t writeIndex, uint64_t minReadIn
 }
 
 Counter::Counter(uint64_t writeIndex, uint64_t minReadIndex, uint32_t maskReadBits) noexcept
-    : spin(),
-      writeIndex(writeIndex - 1),
-      minReadIndex(minReadIndex),
-      maskReadBits(maskReadBits) {}
-
-Counter::~Counter() noexcept {}
+    : spin{},
+      writeIndex{ writeIndex },
+      minReadIndex{ minReadIndex },
+      maskReadBits{ maskReadBits } {}
 
 uint64_t Counter::nextWriteIndex() noexcept {
     this->spin.lock();

@@ -1,13 +1,15 @@
-#ifndef _UTILS_HMAC_H_
-#define _UTILS_HMAC_H_
+#ifndef UTILS_HMAC_H
+#define UTILS_HMAC_H
 
+#include <tuple>
 #include <cstdint>
-#include "error/error_code.h"
+#include "error/error.h"
+#include "entity/array.h"
 
 class UtilsHMAC {
 public:
-    static Error::Code calcHMAC(const uint8_t key[32], const uint8_t* data, uint16_t sizeData, uint8_t outHMAC[32]);
-    static bool validateHMAC(const uint8_t* key, const uint8_t* data, uint16_t sizeData, const uint8_t expectedHMAC[32]);
+    static std::tuple<Error::Code, Array<uint8_t>> calcHMAC(const Array<uint8_t>& key, const Array<uint8_t>& data);
+    static std::tuple<Error::Code, bool> validateHMAC(const Array<uint8_t>& key, const Array<uint8_t>& data, const Array<uint8_t>& expectedHMAC);
 };
 
-#endif
+#endif // !UTILS_HMAC_H

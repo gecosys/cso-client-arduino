@@ -5,28 +5,35 @@ extern "C" {
 #include "message/define.h"
 #include "utils/utils_dh.h"
 
-
-Result<BigNum> UtilsDH::generatePrivateKey() {
-    BigNum result;
+std::tuple<Error::Code, BigInt> UtilsDH::generatePrivateKey() {
+    BigInt result;
     auto errorCode = result.setNumber(abs((int32_t)esp_random()));
-    return make_result(errorCode, std::move(result));
+    return std::make_tuple(errorCode, std::move(result));
 }
 
-Result<BigNum> UtilsDH::calcPublicKey(const BigNum& gKey, const BigNum& nKey, const BigNum& privKey) {
+std::tuple<Error::Code, BigInt> UtilsDH::calcPublicKey(const BigInt& gKey, const BigInt& nKey, const BigInt& privKey) {
     return gKey.powMod(privKey, nKey);
 }
 
-Error::Code UtilsDH::calcSecretKey(const BigNum& nKey, const BigNum& clientPrivKey, const BigNum& serverPubKey, uint8_t outSecretKey[32]) {
-    auto result_powmod = serverPubKey.powMod(clientPrivKey, nKey);
-    if (result_powmod.errorCode != Error::Nil) {
-        return result_powmod.errorCode;
+std::tuple<Error::Code, Array<uint8_t>> UtilsDH::calcSecretKey(const BigInt& nKey, const BigInt& clientPrivKey, const BigInt& serverPubKey) {
+    // Calculate secret key and convert to string
+    std::string str;
+    {
+        Error::Code errcode;
+        BigInt secretKey;
+
+        std::tie(errcode, secretKey) = serverPubKey.powMod(clientPrivKey, nKey);
+        if (errcode != Error::Code::Nil) {
+            return std::make_tuple(errcode, Array<uint8_t>{});
+        }
+
+        std::tie(errcode, str) = secretKey.toString();
+        if (errcode != Error::Code::Nil) {
+            return std::make_tuple(errcode, Array<uint8_t>{});
+        }
     }
 
-    auto result_tostr = result_powmod.data.toString();
-    if (result_tostr.errorCode != Error::Nil) {
-        return result_tostr.errorCode;
-    }
-
-    mbedtls_sha256((uint8_t*)result_tostr.data.c_str(), result_tostr.data.length(), outSecretKey, 0);
-    return Error::Nil;
+    Array<uint8_t> secretKey{ 32 };
+    mbedtls_sha256((uint8_t*)str.c_str(), str.length(), secretKey.get(), 0);
+    return std::make_tuple(Error::Code::Nil, std::move(secretKey));
 }

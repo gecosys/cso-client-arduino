@@ -1,5 +1,5 @@
-#ifndef _CSO_COUNTER_INTERFACE_H_
-#define _CSO_COUNTER_INTERFACE_H_
+#ifndef CSO_COUNTER_INTERFACE_H
+#define CSO_COUNTER_INTERFACE_H
 
 #include <cstdint>
 
@@ -10,4 +10,4 @@ public:
     virtual bool markReadDone(uint64_t index) noexcept = 0;
 };
 
-#endif //_CSO_COUNTER_INTERFACE_H_
+#endif // !CSO_COUNTER_INTERFACE_H

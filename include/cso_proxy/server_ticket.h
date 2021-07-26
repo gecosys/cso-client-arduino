@@ -1,35 +1,31 @@
-#ifndef _CSO_PROXY_SERVER_TICKET_H_
-#define _CSO_PROXY_SERVER_TICKET_H_
+#ifndef CSO_PROXY_SERVER_TICKET
+#define CSO_PROXY_SERVER_TICKET
 
-#include <memory>
 #include <string>
+#include <cstdint>
+#include "entity/array.h"
 
 // ServerTicket is an activation ticket from the Hub server
-class ServerTicket {
-public:
+struct ServerTicket {
     std::string hubIP;
     uint16_t hubPort;
     uint16_t ticketID;
-    std::shared_ptr<uint8_t> ticketBytes;
-    std::shared_ptr<uint8_t> serverSecretKey;
+    Array<uint8_t> ticketBytes;
+    Array<uint8_t> serverSecretKey;
 
-public:
     ServerTicket() noexcept;
+    ServerTicket(ServerTicket&& other) noexcept;
+    ServerTicket(const ServerTicket& other);
     ServerTicket(
         std::string&& hubIP,
         uint16_t hubPort,
         uint16_t ticketID,
-        uint8_t* ticketBytes,
-        uint8_t* serverSecretKey
-    ) noexcept;
+        Array<uint8_t>&& ticketBytes,
+        Array<uint8_t>&& serverSecretKey) noexcept;
+    ~ServerTicket() noexcept;
 
-    // ServerTicket(ServerTicket&& other) noexcept {
-    //   this->ticketID = other.ticketID;
-    //   this->hubPort = other.hubPort;
-    //   std::swap(this->hubIP, other.hubIP);
-    //   std::swap(this->ticketBytes, other.ticketBytes);
-    //   std::swap(this->serverSecretKey, other.serverSecretKey);
-    // }
+    ServerTicket operator=(ServerTicket&& other) noexcept;
+    ServerTicket& operator=(const ServerTicket& other);
 };
 
-#endif // _CSO_PROXY_SERVER_TICKET_H_
+#endif // !CSO_PROXY_SERVER_TICKET

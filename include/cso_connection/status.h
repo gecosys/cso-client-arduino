@@ -1,16 +1,14 @@
-#ifndef _CSO_CONNECTION_STATUS_H_
-#define _CSO_CONNECTION_STATUS_H_
+#ifndef CSO_CONNECTION_STATUS_H
+#define CSO_CONNECTION_STATUS_H
 
 #include <cstdint>
 
 class Status {
 public:
     enum Code : uint8_t {
-        Prepare = 0,
-        Connecting,
-        Connected,
-        Disconnected,
+        Connected    = 1U,
+        Disconnected = 2U,
     };
 };
 
-#endif // _CSO_CONNECTION_STATUS_H_
+#endif // !CSO_CONNECTION_STATUS_H

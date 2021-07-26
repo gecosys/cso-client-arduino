@@ -1,14 +1,19 @@
-#ifndef _UTILS_AES_H_
-#define _UTILS_AES_H_
+#ifndef UTILS_AES_H
+#define UTILS_AES_H
 
+#include <tuple>
 #include <cstdint>
-#include "message/define.h"
-#include "error/error_code.h"
+#include "error/error.h"
+#include "entity/array.h"
 
 class UtilsAES {
 public:
-    static Error::Code encrypt(const uint8_t key[32], const uint8_t* input, uint16_t sizeInput, const uint8_t* aad, uint8_t sizeAad, uint8_t outIV[LENGTH_IV], uint8_t outAuthenTag[LENGTH_AUTHEN_TAG], uint8_t* output);
-    static Error::Code decrypt(const uint8_t key[32], const uint8_t* input, uint16_t sizeInput, const uint8_t* aad, uint8_t sizeAad, const uint8_t iv[LENGTH_IV], const uint8_t authenTag[LENGTH_AUTHEN_TAG], uint8_t* output);
+    // Result got order: error code, iv, tag, output
+    // Output's length equals to input's length
+    static std::tuple<Error::Code, Array<uint8_t>, Array<uint8_t>, Array<uint8_t>> encrypt(const Array<uint8_t>& key, const Array<uint8_t>& input, const Array<uint8_t>& aad);
+
+    // Output's length equals to input's length
+    static std::tuple<Error::Code, Array<uint8_t>> decrypt(const Array<uint8_t>& key, const Array<uint8_t>& input, const Array<uint8_t>& aad, const Array<uint8_t>& iv, const Array<uint8_t>& tag);
 };
 
-#endif
+#endif // !UTILS_AES_H
