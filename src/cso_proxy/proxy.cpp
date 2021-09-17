@@ -187,6 +187,10 @@ std::tuple<Error, ServerTicket> Proxy::registerConnection(const ServerKey& serve
                     std::string encodeIV = UtilsBase64::encode(iv);
                     std::string encodeToken = UtilsBase64::encode(token);
                     std::string encodeAuthenTag = UtilsBase64::encode(tag);
+
+                    iv.reset();
+                    tag.reset();
+                    token.reset();
                 
                     StaticJsonDocument<JSON_OBJECT_SIZE(6)> js_doc;
                     JsonObject js_object = js_doc.to<JsonObject>();
