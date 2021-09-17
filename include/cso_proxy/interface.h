@@ -9,8 +9,8 @@
 
 class IProxy {
 public:
-    virtual std::tuple<Error::Code, ServerKey> exchangeKey() = 0;
-    virtual std::tuple<Error::Code, ServerTicket> registerConnection(const ServerKey& serverKey) = 0;
+    virtual std::tuple<Error, ServerKey> exchangeKey() = 0;
+    virtual std::tuple<Error, ServerTicket> registerConnection(const ServerKey& serverKey) = 0;
 };
 
 #endif // !CSO_PROXY_INTERFACE_H

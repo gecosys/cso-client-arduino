@@ -3,7 +3,7 @@
 
 #include <string>
 #include <cstdint>
-#include "entity/array.h"
+#include "entity/array.hpp"
 
 // ServerTicket is an activation ticket from the Hub server
 struct ServerTicket {

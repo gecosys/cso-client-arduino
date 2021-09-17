@@ -1,13 +1,11 @@
-#ifndef ENTITY_SPSC_QUEUE_H
-#define ENTITY_SPSC_QUEUE_H
+#ifndef ENTITY_SPSC_QUEUE_HPP
+#define ENTITY_SPSC_QUEUE_HPP
 
 #include <tuple>
 #include <atomic>
 #include <cstdint>
 #include <cassert>
 #include <type_traits>
-#include "error/error.h"
-#include "error/package/entity_err.h"
 
 template<typename Type>
 class SPSCQueue {
@@ -32,18 +30,14 @@ private:
             reinterpret_cast<Type*>(std::addressof(this->storage))->~Type();
         }
 
-        Type& reference() noexcept {
-            return *(reinterpret_cast<Type*>(std::addressof(this->storage)));
-        }
-
-        Type&& move() noexcept {
+        Type&& get() noexcept {
             return std::move(*(reinterpret_cast<Type*>(std::addressof(this->storage))));
         }
     };
 
 private:
     private:
-    size_t cap;
+    size_t capacity;
     Slot* slots;
     size_t head;
     size_t tail;
@@ -59,8 +53,8 @@ private:
         return ++n;
     }
 
-    constexpr size_t idx(size_t i) const noexcept { return i & (this->cap - 1U); }
-    constexpr size_t turn(size_t i) const noexcept { return i / this->cap; }
+    constexpr size_t idx(size_t i) const noexcept { return i & (this->capacity - 1U); }
+    constexpr size_t turn(size_t i) const noexcept { return i / this->capacity; }
 
 public:
     SPSCQueue(SPSCQueue&& other) = delete;
@@ -70,13 +64,14 @@ public:
     SPSCQueue& operator=(const SPSCQueue& other) = delete;
 
     explicit SPSCQueue(const size_t capacity)
-        : cap{ 0 },
+        : capacity{ 0 },
           slots{ nullptr },
           head{ 0 },
           tail{ 0 } {
         static_assert(
-            std::is_nothrow_move_constructible<Type>::value ||
-            std::is_nothrow_copy_constructible<Type>::value,
+            std::is_nothrow_default_constructible<Type>::value &
+            (std::is_nothrow_move_constructible<Type>::value ||
+            std::is_nothrow_copy_constructible<Type>::value),
             "Type must get noexcept copy constructor or move constructor + move assign"
         );
 
@@ -89,66 +84,44 @@ public:
             throw "Capacity must be larger than 0";
         }
 
-        this->cap = roundupToPowerOf2(capacity);
-        this->slots = new Slot[this->cap];
+        this->capacity = roundupToPowerOf2(capacity);
+        this->slots = new Slot[this->capacity];
     }
 
     ~SPSCQueue() noexcept {
-        for (size_t i = 0; i < this->cap; ++i) {
+        for (size_t i = 0; i < this->capacity; ++i) {
             this->slots[i].~Slot();
         }
         delete[] this->slots;
     }
 
     template <typename... Args>
-    Error::Code try_push(Args &&... args) noexcept {
-        auto tail = this->tail++;
+    bool try_push(Args &&... args) noexcept {
+        auto tail = this->tail;
         auto turn = this->turn(tail) << 1U;
         auto& slot = this->slots[idx(tail)];
 
         if (turn != slot.turn.load(std::memory_order_acquire)) {
-            this->tail--;
-            return Error::buildCode(
-                EntityErr::ID,
-                EntityErr::Func::SPSCQueue_TryPush,
-                EntityErr::Reason::SPSCQueue_QueueFull
-            );
+            return false;
         }
 
+        this->tail++;
         slot.construct(std::forward<Args>(args)...);
         slot.turn.store(turn + 1U, std::memory_order_release);
-        return Error::Code::Nil;
+        return true;
     }
 
-    std::tuple<Error::Code, Type> try_pop() noexcept {
-        auto head = this->head++;
+    std::tuple<bool, Type> try_pop() noexcept {
+        auto head = this->head;
         auto turn = (this->turn(head) << 1U) + 1U;
         auto& slot = this->slots[idx(head)];
 
         if (turn != slot.turn.load(std::memory_order_acquire)) {
-            this->head--;
-            return std::make_tuple(
-                Error::buildCode(
-                    EntityErr::ID,
-                    EntityErr::Func::SPSCQueue_TryPop,
-                    EntityErr::Reason::SPSCQueue_QueueEmpty
-                ),
-                Type{}
-            );
+            return std::make_tuple(false, Type{});
         }
 
-        // Get result
-        std::tuple<Error::Code, Type> result;
-        if (std::is_nothrow_move_constructible<Type>::value) {
-            result = std::make_tuple(Error::Code::Nil, slot.move());
-        }
-        // Because Queue's constructor checked object that must get noexcept copy or move constructible,
-        // if not move constructible, is copy constructible
-        else {
-            result = std::make_tuple(Error::Code::Nil, slot.reference());
-        }
-
-        // Update slot
+        // Get result & Update slot
+        std::tuple<bool, Type> result{ true, slot.get() };
         slot.destroy();
         slot.turn.store(turn + 1U, std::memory_order_release);
         return result;

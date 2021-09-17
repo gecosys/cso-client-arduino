@@ -40,10 +40,10 @@ private:
         std::unique_ptr<IProxy>&& proxy
     );
 
-    std::tuple<Error::Code, ServerTicket> prepare();
-    Error::Code activateConnection();
-    Error::Code doSendMessageNotRetry(const std::string& name, const Array<uint8_t>& content, bool isGroup, bool isEncrypted, bool isCache);
-    Error::Code doSendMessageRetry(const std::string& recvName, const Array<uint8_t>& content, bool isGroup, bool isEncrypted, int32_t retry);
+    std::tuple<Error, ServerTicket> prepare();
+    Error activateConnection();
+    Error doSendMessageNotRetry(const std::string& name, const Array<uint8_t>& content, bool isGroup, bool isEncrypted, bool isCache);
+    Error doSendMessageRetry(const std::string& recvName, const Array<uint8_t>& content, bool isGroup, bool isEncrypted, int32_t retry);
 
 public:
     Connector() = delete;
@@ -55,13 +55,13 @@ public:
     Connector& operator=(const Connector& other) = delete;
 
     void loopReconnect();
-    void listen(Error::Code (*cb)(const std::string& sender, const Array<uint8_t>& data));
+    void listen(Error (*cb)(const std::string& sender, const Array<uint8_t>& data));
 
-    Error::Code sendMessage(const std::string& recvName, const Array<uint8_t>& content, bool isEncrypted, bool isCache);
-    Error::Code sendGroupMessage(const std::string& groupName, const Array<uint8_t>& content, bool isEncrypted, bool isCache);
+    Error sendMessage(const std::string& recvName, const Array<uint8_t>& content, bool isEncrypted, bool isCache);
+    Error sendGroupMessage(const std::string& groupName, const Array<uint8_t>& content, bool isEncrypted, bool isCache);
 
-    Error::Code sendMessageAndRetry(const std::string& recvName, const Array<uint8_t>& content, bool isEncrypted, int32_t retry);
-    Error::Code sendGroupMessageAndRetry(const std::string& groupName, const Array<uint8_t>& content, bool isEncrypted, int32_t retry);
+    Error sendMessageAndRetry(const std::string& recvName, const Array<uint8_t>& content, bool isEncrypted, int32_t retry);
+    Error sendGroupMessageAndRetry(const std::string& groupName, const Array<uint8_t>& content, bool isEncrypted, int32_t retry);
 };
 
 #endif // !CSO_CONNECTOR_H

@@ -1,5 +1,5 @@
 #include "message/readyticket.h"
-#include "error/package/message_err.h"
+#include "utils/utils_define.h"
 
 ReadyTicket::ReadyTicket() noexcept 
     : isReady{ false },
@@ -30,16 +30,9 @@ uint64_t ReadyTicket::getIdxWrite() noexcept {
 // Idx Read: 8 bytes
 // Mark Read: 4 bytes
 // Idx Write: 8 bytes
-std::tuple<Error::Code, std::unique_ptr<ReadyTicket>> ReadyTicket::parseBytes(const Array<uint8_t>& data) noexcept {
+std::tuple<Error, std::unique_ptr<ReadyTicket>> ReadyTicket::parseBytes(const Array<uint8_t>& data) noexcept {
     if (data.length() != 21) {
-        return std::make_tuple(
-             Error::buildCode(
-                MessageErr::ID,
-                MessageErr::Func::ReadyTicket_ParseBytes,
-                MessageErr::Reason::ReadyTicket_InvalidSize
-            ),
-            nullptr
-        );
+        return std::make_tuple(Error{ GET_FUNC_NAME(), "Length of ready ticket must be 21" }, nullptr);
     }
 
     std::unique_ptr<ReadyTicket> ticket{ new ReadyTicket() };
@@ -63,5 +56,5 @@ std::tuple<Error::Code, std::unique_ptr<ReadyTicket>> ReadyTicket::parseBytes(co
                        ((uint64_t)data[16] << 24U) |
                        ((uint64_t)data[15] << 16U) |
                        ((uint64_t)data[14] << 8U) | data[13];
-    return std::make_tuple(Error::Code::Nil, std::move(ticket));
+    return std::make_tuple(Error{}, std::move(ticket));
 }

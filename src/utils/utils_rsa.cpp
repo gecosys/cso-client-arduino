@@ -5,11 +5,11 @@ extern "C" {
 }
 #include "message/define.h"
 #include "utils/utils_rsa.h"
-#include "error/external.h"
-#include "error/package/utils_err.h"
+#include "utils/utils_define.h"
+#include "error/thirdparty.h"
 
 
-std::tuple<Error::Code, bool> UtilsRSA::verifySignature(const std::string& publicKey, const Array<uint8_t>& signature, const Array<uint8_t>& data) {
+std::tuple<Error, bool> UtilsRSA::verifySignature(const std::string& publicKey, const Array<uint8_t>& signature, const Array<uint8_t>& data) {
     uint8_t hashed[32];
     size_t usedLen;
     mbedtls_pem_context pemCtx;
@@ -53,19 +53,10 @@ std::tuple<Error::Code, bool> UtilsRSA::verifySignature(const std::string& publi
 
     mbedtls_pem_free(&pemCtx);
     mbedtls_pk_free(&pkCtx);
-    return std::make_tuple(Error::Code::Nil, true);
+    return std::make_tuple(Error{}, true);
 
 handleError:
     mbedtls_pem_free(&pemCtx);
     mbedtls_pk_free(&pkCtx);
-
-    return std::make_tuple(
-        Error::buildCode(
-            UtilsErr::ID,
-            UtilsErr::Func::RSA_VerifySignature,
-            errcode,
-            External::ID::MbedTLS
-        ),
-        false
-    );
+    return std::make_tuple(Error{ GET_FUNC_NAME(), Thirdparty::getMbedtlsError(errcode) }, false);
 }

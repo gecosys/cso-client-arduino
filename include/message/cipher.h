@@ -5,7 +5,7 @@
 #include <string>
 #include <memory>
 #include "error/error.h"
-#include "entity/array.h"
+#include "entity/array.hpp"
 #include "message/type.h"
 
 class Cipher {
@@ -24,7 +24,7 @@ private:
     MessageType msgType;
 
 private:
-    static std::tuple<Error::Code, Array<uint8_t>> buildBytes(
+    static std::tuple<Error, Array<uint8_t>> buildBytes(
         uint64_t msgID,
         uint64_t msgTag,
         MessageType msgType,
@@ -55,11 +55,11 @@ public:
     void setIsRequest(bool isRequest) noexcept;
     void setIsEncrypted(bool isEncrypted) noexcept;
     // "iv" has fixed length is LENGTH_IV in message/define.h
-    Error::Code setIV(const Array<uint8_t>& iv) noexcept;
+    Error setIV(const Array<uint8_t>& iv) noexcept;
     // "authenTag" has fixed length is LENGTH_AUTHEN_TAG in message/define.h
-    Error::Code setAuthenTag(const Array<uint8_t>& authenTag) noexcept;
+    Error setAuthenTag(const Array<uint8_t>& authenTag) noexcept;
     // "sign" has fixed length is LENGTH_SIGN in message/define.h
-    Error::Code setSign(const Array<uint8_t>& sign) noexcept;
+    Error setSign(const Array<uint8_t>& sign) noexcept;
     void setName(const std::string& name);
     void setName(std::string&& name) noexcept;
     void setData(const Array<uint8_t>& data);
@@ -82,13 +82,13 @@ public:
     const std::string& getName() const noexcept;
     const Array<uint8_t>& getData() const noexcept;
 
-    std::tuple<Error::Code, Array<uint8_t>> intoBytes();
-    std::tuple<Error::Code, Array<uint8_t>> getRawBytes();
-    std::tuple<Error::Code, Array<uint8_t>> getAad();
+    std::tuple<Error, Array<uint8_t>> intoBytes();
+    std::tuple<Error, Array<uint8_t>> getRawBytes();
+    std::tuple<Error, Array<uint8_t>> getAad();
 
-    static std::tuple<Error::Code, std::unique_ptr<Cipher>> parseBytes(const Array<uint8_t>& buffer);
+    static std::tuple<Error, std::unique_ptr<Cipher>> parseBytes(const Array<uint8_t>& buffer);
 
-    static std::tuple<Error::Code, Array<uint8_t>> buildRawBytes(
+    static std::tuple<Error, Array<uint8_t>> buildRawBytes(
         uint64_t msgID,
         uint64_t msgTag,
         MessageType msgType,
@@ -99,7 +99,7 @@ public:
         const std::string& name,
         const Array<uint8_t>& data);
 
-    static std::tuple<Error::Code, Array<uint8_t>> buildAad(
+    static std::tuple<Error, Array<uint8_t>> buildAad(
         uint64_t msgID,
         uint64_t msgTag,
         MessageType msgType,
@@ -111,7 +111,7 @@ public:
 
     // "iv" has fixed length is 12
     // "authenTag" has fixed length is 16
-    static std::tuple<Error::Code, Array<uint8_t>> buildCipherBytes(
+    static std::tuple<Error, Array<uint8_t>> buildCipherBytes(
         uint64_t msgID,
         uint64_t msgTag,
         MessageType msgType,
@@ -123,7 +123,7 @@ public:
         const Array<uint8_t>& authenTag,
         const Array<uint8_t>& data);
 
-    static std::tuple<Error::Code, Array<uint8_t>> buildNoCipherBytes(
+    static std::tuple<Error, Array<uint8_t>> buildNoCipherBytes(
         uint64_t msgID,
         uint64_t msgTag,
         MessageType msgType,

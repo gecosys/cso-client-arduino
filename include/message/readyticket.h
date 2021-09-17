@@ -4,7 +4,7 @@
 #include <tuple>
 #include <memory>
 #include <cstdint>
-#include "entity/array.h"
+#include "entity/array.hpp"
 #include "error/error.h"
 
 class ReadyTicket {
@@ -23,7 +23,7 @@ public:
     uint32_t getMaskRead() noexcept;
     uint64_t getIdxWrite() noexcept;
 
-    static std::tuple<Error::Code, std::unique_ptr<ReadyTicket>> parseBytes(const Array<uint8_t>& data) noexcept;
+    static std::tuple<Error, std::unique_ptr<ReadyTicket>> parseBytes(const Array<uint8_t>& data) noexcept;
 };
 
 #endif // !MESSAGE_READYTICKET_H

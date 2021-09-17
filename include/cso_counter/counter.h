@@ -4,7 +4,7 @@
 #include <atomic>
 #include <memory>
 #include "interface.h"
-#include "entity/spin_lock.h"
+#include "entity/spinlock.h"
 
 class Counter : public ICounter {
 private:

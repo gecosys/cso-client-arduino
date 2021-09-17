@@ -1,6 +1,6 @@
 // #include <lwip/sockets.h>
 #include "cso_connection/connection.h"
-#include "error/package/connection_err.h"
+#include "utils/utils_define.h"
 
 #define HEADER_SIZE 2
 #define BUFFER_SIZE 1024
@@ -18,27 +18,23 @@ Connection::~Connection() noexcept {
     this->client.stop();
 }
 
-Error::Code Connection::connect(const std::string& host, uint16_t port) {
+Error Connection::connect(const std::string& host, uint16_t port) {
     if (this->status.load(std::memory_order_acquire) == Status::Connected) {
-        return Error::Code::Nil;
+        return Error{};
     }
 
     uint8_t retry = 0;
     while (!client.connect(host.c_str(), port)) {
         if (++retry >= 2) {
-            return Error::buildCode(
-                ConnectionErr::ID,
-                ConnectionErr::Func::Connection_Connect,
-                ConnectionErr::Reason::Socket_ConnectFailed
-            );
+            return Error{ GET_FUNC_NAME(), "Socket connection failed" };
         }
         vTaskDelay(100);
     }
     this->status.store(Status::Connected, std::memory_order_release);
-    return Error::Nil;
+    return Error{};
 }
 
-Error::Code Connection::loopListen() {
+Error Connection::loopListen() {
     bool header{ true };
     // bool disconnected = true;
     uint16_t seek{ 0 };
@@ -97,11 +93,7 @@ Error::Code Connection::loopListen() {
 
     this->client.stop();
     this->status.store(Status::Disconnected, std::memory_order_release);
-    return Error::buildCode(
-        ConnectionErr::ID,
-        ConnectionErr::Func::Connection_LoopListen,
-        ConnectionErr::Reason::Socket_Disconnected
-    );
+    return Error{ GET_FUNC_NAME(), "Socket connection is disconnected" };
     // if (disconnected) {
     //     this->client.stop();        
     //     this->status = Status::Disconnected;
@@ -110,14 +102,10 @@ Error::Code Connection::loopListen() {
     // return Error::Nil;
 }
 
-Error::Code Connection::sendMessage(const Array<uint8_t>& data) {
+Error Connection::sendMessage(const Array<uint8_t>& data) {
     if (WiFi.status() != WL_CONNECTED || 
         this->status.load(std::memory_order_acquire) != Status::Connected) {
-        return Error::buildCode(
-            ConnectionErr::ID,
-            ConnectionErr::Func::Connection_SendMessage,
-            ConnectionErr::Reason::Socket_Disconnected
-        );
+        return Error{ GET_FUNC_NAME(), "Socket connection is disconnected" };
     }
 
     //============
@@ -140,22 +128,18 @@ Error::Code Connection::sendMessage(const Array<uint8_t>& data) {
 
         this->client.stop();
         this->status.store(Status::Disconnected, std::memory_order_release);
-        return Error::buildCode(
-            ConnectionErr::ID,
-            ConnectionErr::Func::Connection_SendMessage,
-            ConnectionErr::Reason::Socket_Disconnected
-        );
+        return Error{ GET_FUNC_NAME(), "Socket connection is disconnected" };
     }
-    return Error::Nil;
+    return Error{};
 }
 
 Array<uint8_t> Connection::getMessage() {
-    Error::Code errcode;
+    bool ok;
     Array<uint8_t> msg;
 
-    std::tie(errcode, msg) = this->nextMsg.try_pop();
-    if (errcode != Error::Code::Nil) {
-        return Array<uint8_t>{};
+    std::tie(ok, msg) = this->nextMsg.try_pop();
+    if (ok) {
+        return msg;
     }
-    return msg;
+    return Array<uint8_t>{};
 }

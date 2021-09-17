@@ -15,7 +15,7 @@ private:
 
     MessageType getMessagetype(bool isGroup, bool isCached) noexcept;
 
-    std::tuple<Error::Code, Array<uint8_t>> createMessage(
+    std::tuple<Error, Array<uint8_t>> createMessage(
         uint64_t msgID,
         uint64_t msgTag,
         bool isGroup,
@@ -38,10 +38,10 @@ public:
     void setSecretKey(Array<uint8_t>&& secretKey) noexcept;
     void setSecretKey(const Array<uint8_t>& secretKey);
 
-    std::tuple<Error::Code, std::unique_ptr<Cipher>> parseReceivedMessage(const Array<uint8_t>& content);
-    std::tuple<Error::Code, Array<uint8_t>> buildActiveMessage(uint16_t ticketID, const Array<uint8_t>& ticketBytes);
+    std::tuple<Error, std::unique_ptr<Cipher>> parseReceivedMessage(const Array<uint8_t>& content);
+    std::tuple<Error, Array<uint8_t>> buildActiveMessage(uint16_t ticketID, const Array<uint8_t>& ticketBytes);
 
-    std::tuple<Error::Code, Array<uint8_t>> buildMessage(
+    std::tuple<Error, Array<uint8_t>> buildMessage(
         uint64_t msgID,
         uint64_t msgTag,
         bool encrypted,
@@ -52,7 +52,7 @@ public:
         const std::string& recvName,
         const Array<uint8_t>& content);
 
-    std::tuple<Error::Code, Array<uint8_t>> buildGroupMessage(
+    std::tuple<Error, Array<uint8_t>> buildGroupMessage(
         uint64_t msgID,
         uint64_t msgTag,
         bool encrypted,

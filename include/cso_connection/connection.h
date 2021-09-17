@@ -5,7 +5,7 @@
 #include <atomic>
 #include "status.h"
 #include "interface.h"
-#include "entity/spsc_queue.h"
+#include "entity/spsc_queue.hpp"
 
 class Connection : public IConnection {
 private:
@@ -28,9 +28,9 @@ public:
     Connection& operator=(Connection&& other) = delete;
     Connection& operator=(const Connection& other) = delete;
 
-    Error::Code connect(const std::string& host, uint16_t port);
-    Error::Code loopListen();
-    Error::Code sendMessage(const Array<uint8_t>& data);
+    Error connect(const std::string& host, uint16_t port);
+    Error loopListen();
+    Error sendMessage(const Array<uint8_t>& data);
     Array<uint8_t> getMessage();
 };
 

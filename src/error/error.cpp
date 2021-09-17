@@ -1,85 +1,68 @@
-#include <math.h>
 #include "error/error.h"
-#include "error/package/connection_err.h"
-#include "error/package/connector_err.h"
-#include "error/package/entity_err.h"
-#include "error/package/message_err.h"
-#include "error/package/parser_err.h"
-#include "error/package/proxy_err.h"
-#include "error/package/utils_err.h"
+#include "utils/utils_string.h"
 
-std::tuple<uint8_t, uint8_t, uint8_t, uint32_t> Error::parseCode(Error::Code code) noexcept {
-    return std::make_tuple(
-        (code >> 48ULL),
-        (code >> 40ULL),
-        (code >> 32ULL),
-        (code & 0xFFFFFFFFULL)
-    );
+Error::Error() noexcept
+	: info{ nullptr } {}
+
+Error::Error(std::string&& funcName, std::string&& content) noexcept
+	: info{ new Information{} } {
+	this->info->funcName = std::forward<std::string>(funcName);
+	this->info->content = std::forward<std::string>(content);
 }
 
-Error::Code Error::buildCode(uint8_t packID, uint8_t funcID, int32_t code, uint8_t extID) noexcept {
-    uint64_t ret = code < 0 ? -code : code;
-    ret |= (uint64_t(packID) << 48ULL);
-    ret |= (uint64_t(funcID) << 40ULL);
-    ret |= (uint64_t(extID)  << 32ULL);
-    return (Error::Code)ret;
+Error::Error(Error&& other) noexcept
+	: info{ other.info } {
+	other.info = nullptr;
 }
 
-std::string Error::getString(Error::Code code) noexcept {
-    uint8_t packID;
-    uint8_t funcID;
-    uint8_t extID;
-    uint32_t reasonCode;
+Error::Error(const Error& other)
+	: info{ new Information{} } {
+	this->info->funcName = other.info->funcName;
+	this->info->content = other.info->content;
+}
 
-    std::tie(packID, funcID, extID, reasonCode) = Error::parseCode(code);
+Error::~Error() noexcept {
+	if (this->info) {
+		delete this->info;
+	}
+}
 
-    //===================
-    // Connection package
-    //===================
-    if (packID == ConnectionErr::ID) {
-        return ConnectionErr::getString(funcID, reasonCode, extID);
-    }
+Error& Error::operator=(Error&& other) noexcept {
+	if (this->info) {
+		delete this->info;
+	}
+	if (!other.info) {
+		this->info = nullptr;
+		return *this;
+	}
+	this->info = new Information{};
+	this->info->funcName = std::move(other.info->funcName);
+	this->info->content = std::move(other.info->content);
+	return *this;
+}
 
-    //==================
-    // Connector package
-    //==================
-    if (packID == ConnectorErr::ID) {
-        return ConnectorErr::getString(funcID, reasonCode, extID);
-    }
+Error& Error::operator=(const Error& other) {
+	if (this->info) {
+		delete this->info;
+	}
+	if (!other.info) {
+		this->info = nullptr;
+		return *this;
+	}
+	this->info = new Information{};
+	this->info->funcName = other.info->funcName;
+	this->info->content = other.info->content;
+	return *this;
+}
 
-    //===============
-    // Entity package
-    //===============
-    if (packID == EntityErr::ID) {
-        return EntityErr::getString(funcID, reasonCode, extID);
-    }
+bool Error::nil() const noexcept {
+	return this->info == nullptr;
+}
 
-    //================
-    // Message package
-    //================
-    if (packID == MessageErr::ID) {
-        return MessageErr::getString(funcID, reasonCode, extID);
-    }
-
-    //===============
-    // Parser package
-    //===============
-    if (packID == ParserErr::ID) {
-        ParserErr::getString(funcID, reasonCode, extID);
-    }
-
-    //==============
-    // Proxy package
-    //==============
-    if (packID == ProxyErr::ID) {
-        return ProxyErr::getString(funcID, reasonCode, extID);
-    }
-
-    //==============
-    // Utils package
-    //==============
-    if (packID == UtilsErr::ID) {
-        return UtilsErr::getString(funcID, reasonCode, extID);
-    }
-    return "UNKNOWN ERROR";
+std::string Error::toString() const noexcept {
+	return UtilsString::format(
+		"[%s]:%s",
+		this->info->funcName.c_str(),
+		this->info->content.c_str()
+	);
 }

@@ -19,12 +19,12 @@ public:
     BigInt& operator=(const BigInt& rhs) = delete;
     BigInt& operator=(BigInt&& rhs) noexcept;
     
-    Error::Code copy(const BigInt& other);
-    Error::Code setNumber(const int32_t n);
-    Error::Code setString(const std::string& str, int8_t radix = 10);
+    Error copy(const BigInt& other);
+    Error setNumber(const int32_t n);
+    Error setString(const std::string& str, int8_t radix = 10);
    
-    std::tuple<Error::Code, BigInt> powMod(const BigInt& power, const BigInt& modulus) const;
-    std::tuple<Error::Code, std::string> toString(int8_t radix = 10) const;
+    std::tuple<Error, BigInt> powMod(const BigInt& power, const BigInt& modulus) const;
+    std::tuple<Error, std::string> toString(int8_t radix = 10) const;
 };
 
 #endif // !ENTITY_BIGINT_H

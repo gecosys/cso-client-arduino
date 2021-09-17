@@ -14,13 +14,13 @@ void exec(void* pvParameters) {
     connector->loopReconnect();
 }
 
-Error::Code callback(const std::string& sender, const Array<uint8_t>& data) {
+Error callback(const std::string& sender, const Array<uint8_t>& data) {
     // Handle response message
     for (int i = 0; i < data.length(); ++i) {
         Serial.printf("%c ", data[i]);
     }
     Serial.println();
-    return Error::Nil;
+    return Error{};
 }
 
 void setup() {
@@ -86,9 +86,9 @@ void loop() {
     //         data[i] = ptr[i];
     //     }
     // }
-    auto errcode = connector->sendMessageAndRetry("trung", data, true, 1);
-    if (errcode != Error::Nil) {
-        log_e("%s", Error::getString(errcode).c_str());
+    auto err = connector->sendMessageAndRetry("trung", data, true, 1);
+    if (!err.nil()) {
+        log_e("%s", err.toString().c_str());
         delay(1000);
         return;
     }

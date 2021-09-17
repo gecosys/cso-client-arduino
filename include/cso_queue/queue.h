@@ -5,7 +5,7 @@
 #include <memory>
 #include "item.h"
 #include "interface.h"
-#include "entity/spin_lock.h"
+#include "entity/spinlock.h"
 
 class Queue : public IQueue {
 private:

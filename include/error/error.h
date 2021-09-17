@@ -15,20 +15,27 @@
 // The reason for doing this is that throwing exceptions is discouraged especially in embedded systems.
 
 class Error {
-public:
-    // Because OpenSSL use 32 bits for error code, We need 64 bits to adapt it
-    // This enum will define general error codes
-    // Specific errors will be defined by package in "package"
-    enum Code : uint64_t {
-        Nil = 0U,
-    };
+private:
+	struct Information {
+		std::string funcName;
+		std::string content;
+	};
 
 private:
-    static std::tuple<uint8_t, uint8_t, uint8_t, uint32_t> parseCode(Error::Code code) noexcept;
+	Information* info;
 
 public:
-    static Error::Code buildCode(uint8_t packID, uint8_t funcID, int32_t errCode, uint8_t extID = 0) noexcept;
-    static std::string getString(Error::Code code) noexcept;
+	Error() noexcept;
+	Error(std::string&& funcName, std::string&& content) noexcept;
+	Error(Error&& other) noexcept;
+	Error(const Error& other);
+	~Error() noexcept;
+
+	Error& operator=(Error&& other) noexcept;
+	Error& operator=(const Error& other);
+
+	bool nil() const noexcept;
+	std::string toString() const noexcept;
 };
 
 #endif // !ERROR_H

@@ -7,7 +7,7 @@
 #include "cso_connector/connector.h"
 #include "cso_connection/connection.h"
 #include "message/readyticket.h"
-#include "error/package/connector_err.h"
+#include "utils/utils_define.h"
 
 #define DELAY_TIME 3000
 #define TIMESTAMP_SECS() esp_timer_get_time() / 1000000ULL
@@ -56,7 +56,7 @@ Connector::Connector(
 Connector::~Connector() noexcept {}
 
 void Connector::loopReconnect() {
-    Error::Code errcode;
+    Error err;
 
     while (true) {
         // "WiFi" will auto reconnect
@@ -69,17 +69,17 @@ void Connector::loopReconnect() {
         {
             // Exchange key
             ServerTicket ticket;
-            std::tie(errcode, ticket) = prepare();
-            if (errcode != Error::Code::Nil) {
-                log_e("%s", Error::getString(errcode).c_str());
+            std::tie(err, ticket) = prepare();
+            if (!err.nil()) {
+                log_e("%s", err.toString().c_str());
                 delay(DELAY_TIME);
                 continue;
             }
 
             // Connect to hub
-            errcode = this->connection->connect(ticket.hubIP, ticket.hubPort);
-            if (errcode != Error::Code::Nil) {
-                log_e("%s", Error::getString(errcode).c_str());
+            err = this->connection->connect(ticket.hubIP, ticket.hubPort);
+            if (!err.nil()) {
+                log_e("%s", err.toString().c_str());
                 delay(DELAY_TIME);
                 continue;
             }
@@ -92,25 +92,25 @@ void Connector::loopReconnect() {
 
         // Loop to receive message
         this->isDisconnected.store(false);
-        errcode = this->connection->loopListen();
-        if (errcode != Error::Code::Nil) {
-            log_e("%s", Error::getString(errcode).c_str());
+        err = this->connection->loopListen();
+        if (!err.nil()) {
+            log_e("%s", err.toString().c_str());
         }
         this->isActivated.store(false);
         this->isDisconnected.store(true);
     }
 }
 
-void Connector::listen(Error::Code (*cb)(const std::string& sender, const Array<uint8_t>& data)) {
+void Connector::listen(Error (*cb)(const std::string& sender, const Array<uint8_t>& data)) {
     // Receive message response
     Array<uint8_t> cipher = this->connection->getMessage();
     if (!cipher.empty()) {
-        Error::Code errcode;
+        Error err;
         std::unique_ptr<Cipher> message;
 
-        std::tie(errcode, message) = this->parser->parseReceivedMessage(cipher);
-        if (errcode != Error::Code::Nil) {
-            log_e("%s", Error::getString(errcode).c_str());
+        std::tie(err, message) = this->parser->parseReceivedMessage(cipher);
+        if (!err.nil()) {
+            log_e("%s", err.toString().c_str());
             return;
         }
 
@@ -118,8 +118,8 @@ void Connector::listen(Error::Code (*cb)(const std::string& sender, const Array<
         // Activate the connection
         if (type == MessageType::Activation) {
             std::unique_ptr<ReadyTicket> readyTicket;
-            std::tie(errcode, readyTicket) = ReadyTicket::parseBytes(message->getData());
-            if (errcode != Error::Code::Nil || !readyTicket->getIsReady()) {
+            std::tie(err, readyTicket) = ReadyTicket::parseBytes(message->getData());
+            if (!err.nil() || !readyTicket->getIsReady()) {
                 return;
             }
 
@@ -155,14 +155,14 @@ void Connector::listen(Error::Code (*cb)(const std::string& sender, const Array<
         }
 
         if (this->counter->markReadDone(message->getMsgTag())) {
-            if (cb(message->getName(), message->getData()) != Error::Code::Nil) {
+            if (!cb(message->getName(), message->getData()).nil()) {
                 this->counter->markReadUnused(message->getMsgTag());
                 return;
             }
         }
         
         Array<uint8_t> newMessage;
-        std::tie(errcode, newMessage) = this->parser->buildMessage(
+        std::tie(err, newMessage) = this->parser->buildMessage(
             message->getMsgID(),
             message->getMsgTag(),
             message->getIsEncrypted(),
@@ -173,8 +173,8 @@ void Connector::listen(Error::Code (*cb)(const std::string& sender, const Array<
             message->getName(),
             Array<uint8_t>{}
         );
-        if (errcode != Error::Code::Nil) {
-            log_e("%s", Error::getString(errcode).c_str());
+        if (!err.nil()) {
+            log_e("%s", err.toString().c_str());
             return;
         }
         this->connection->sendMessage(newMessage);
@@ -186,9 +186,9 @@ void Connector::listen(Error::Code (*cb)(const std::string& sender, const Array<
 
     // Do activate the connection
     if (!this->isActivated.load(std::memory_order_acquire) && (TIMESTAMP_SECS() - this->time) >= 3) {
-        Error::Code errcode = activateConnection();
-        if (errcode != Error::Code::Nil) {
-            log_e("%s", Error::getString(errcode).c_str());
+        Error err = activateConnection();
+        if (!err.nil()) {
+            log_e("%s", err.toString().c_str());
         }
         this->time = TIMESTAMP_SECS();
         return;
@@ -202,12 +202,12 @@ void Connector::listen(Error::Code (*cb)(const std::string& sender, const Array<
             return;
         }
 
-        Error::Code errcode;
+        Error err;
         Array<uint8_t> message;
         ItemQueue& item = ref_item.get();
 
         if (item.isGroup) {
-            std::tie(errcode, message) = this->parser->buildGroupMessage(
+            std::tie(err, message) = this->parser->buildGroupMessage(
                 item.msgID,
                 item.msgTag,
                 item.isEncrypted,
@@ -220,7 +220,7 @@ void Connector::listen(Error::Code (*cb)(const std::string& sender, const Array<
             );
         }
         else {
-            std::tie(errcode, message) = this->parser->buildMessage(
+            std::tie(err, message) = this->parser->buildMessage(
                 item.msgID,
                 item.msgTag,
                 item.isEncrypted,
@@ -233,77 +233,50 @@ void Connector::listen(Error::Code (*cb)(const std::string& sender, const Array<
             );
         }
 
-        if (errcode != Error::Code::Nil) {
+        if (!err.nil()) {
             this->time = TIMESTAMP_MICRO_SECS();
-            log_e("%s", Error::getString(errcode).c_str());
+            log_e("%s", err.toString().c_str());
             return;
         }
 
-        errcode = this->connection->sendMessage(message);
-        if (errcode != Error::Nil) {
-            log_e("%s", Error::getString(errcode).c_str());
+        err = this->connection->sendMessage(message);
+        if (!err.nil()) {
+            log_e("%s", err.toString().c_str());
         }
         this->time = TIMESTAMP_MICRO_SECS();
     }
 }
 
-Error::Code Connector::sendMessage(const std::string& recvName, const Array<uint8_t>& content, bool isEncrypted, bool isCache) {
+Error Connector::sendMessage(const std::string& recvName, const Array<uint8_t>& content, bool isEncrypted, bool isCache) {
     if (!this->isActivated.load(std::memory_order_acquire)) {
-        return Error::buildCode(
-            ConnectorErr::ID,
-            ConnectorErr::Func::Connector_SendMsg,
-            ConnectorErr::Reason::Connection_NotActivatd
-        );
+        return Error{ GET_FUNC_NAME(), "Connection is not activated yet" };
     }
     return doSendMessageNotRetry(recvName, content, false, isEncrypted, isCache);
 }
 
-Error::Code Connector::sendGroupMessage(const std::string& groupName, const Array<uint8_t>& content, bool isEncrypted, bool isCache) {
+Error Connector::sendGroupMessage(const std::string& groupName, const Array<uint8_t>& content, bool isEncrypted, bool isCache) {
     if (!this->isActivated.load(std::memory_order_acquire)) {
-        return Error::buildCode(
-            ConnectorErr::ID,
-            ConnectorErr::Func::Connector_SendGroupMsg,
-            ConnectorErr::Reason::Connection_NotActivatd
-        );
+        return Error{ GET_FUNC_NAME(), "Connection is not activated yet" };
     }
     return doSendMessageNotRetry(groupName, content, true, isEncrypted, isCache);
 }
 
-Error::Code Connector::sendMessageAndRetry(const std::string& recvName, const Array<uint8_t>& content, bool isEncrypted, int32_t retry) {
+Error Connector::sendMessageAndRetry(const std::string& recvName, const Array<uint8_t>& content, bool isEncrypted, int32_t retry) {
     if (!this->isActivated.load(std::memory_order_acquire)) {
-        return Error::buildCode(
-            ConnectorErr::ID,
-            ConnectorErr::Func::Connector_SendMsgRetry,
-            ConnectorErr::Reason::Connection_NotActivatd
-        );
+        return Error{ GET_FUNC_NAME(), "Connection is not activated yet" };
     }
-
     if (!this->queueMessages->takeIndex()) {
-        return Error::buildCode(
-            ConnectorErr::ID,
-            ConnectorErr::Func::Connector_SendMsgRetry,
-            ConnectorErr::Reason::MsgQueue_Full
-        );
+        return Error{ GET_FUNC_NAME(), "Message queue is full" };
     }
-
     return doSendMessageRetry(recvName, content, false, isEncrypted, retry);
 }
 
-Error::Code Connector::sendGroupMessageAndRetry(const std::string& groupName, const Array<uint8_t>& content, bool isEncrypted, int32_t retry) {
+Error Connector::sendGroupMessageAndRetry(const std::string& groupName, const Array<uint8_t>& content, bool isEncrypted, int32_t retry) {
     if (!this->isActivated.load(std::memory_order_acquire)) {
-        return Error::buildCode(
-            ConnectorErr::ID,
-            ConnectorErr::Func::Connector_SendGroupMsgRetry,
-            ConnectorErr::Reason::Connection_NotActivatd
-        );
+        return Error{ GET_FUNC_NAME(), "Connection is not activated yet" };
     }
-
     if (!this->queueMessages->takeIndex()) {
-        return Error::buildCode(
-            ConnectorErr::ID,
-            ConnectorErr::Func::Connector_SendGroupMsgRetry,
-            ConnectorErr::Reason::MsgQueue_Full
-        );
+        return Error{ GET_FUNC_NAME(), "Message queue is full" };
     }
     return doSendMessageRetry(groupName, content, true, isEncrypted, retry);
 }
@@ -311,45 +284,45 @@ Error::Code Connector::sendGroupMessageAndRetry(const std::string& groupName, co
 //========
 // PRIVATE
 //========
-std::tuple<Error::Code, ServerTicket> Connector::prepare() {
-    Error::Code errcode;
+std::tuple<Error, ServerTicket> Connector::prepare() {
+    Error err;
     ServerKey serverKey;
 
-    std::tie(errcode, serverKey) = this->proxy->exchangeKey();
-    if (errcode != Error::Code::Nil) {
-        return std::make_tuple(errcode, ServerTicket{});
+    std::tie(err, serverKey) = this->proxy->exchangeKey();
+    if (!err.nil()) {
+        return std::make_tuple(std::move(err), ServerTicket{});
     }
     return this->proxy->registerConnection(serverKey);
 }
 
-Error::Code Connector::activateConnection() {
-    Error::Code errcode;
+Error Connector::activateConnection() {
+    Error err;
     Array<uint8_t> message;
 
-    std::tie(errcode, message) = this->parser->buildActiveMessage(this->ticketID, this->ticketBytes);
-    if (errcode != Error::Code::Nil) {
-        return errcode;
+    std::tie(err, message) = this->parser->buildActiveMessage(this->ticketID, this->ticketBytes);
+    if (!err.nil()) {
+        return err;
     }    
     return this->connection->sendMessage(message);
 }
 
-Error::Code Connector::doSendMessageNotRetry(const std::string& name, const Array<uint8_t>& content, bool isGroup, bool isEncrypted, bool isCache) {
-    Error::Code errcode;
+Error Connector::doSendMessageNotRetry(const std::string& name, const Array<uint8_t>& content, bool isGroup, bool isEncrypted, bool isCache) {
+    Error err;
     Array<uint8_t> message;
 
     if (!isGroup) {
-        std::tie(errcode, message) = this->parser->buildMessage(0, 0, isEncrypted, isCache, true, true, true, name, content);
+        std::tie(err, message) = this->parser->buildMessage(0, 0, isEncrypted, isCache, true, true, true, name, content);
     }
     else {
-        std::tie(errcode, message) = this->parser->buildGroupMessage(0, 0, isEncrypted, isCache, true, true, true, name, content);
+        std::tie(err, message) = this->parser->buildGroupMessage(0, 0, isEncrypted, isCache, true, true, true, name, content);
     }
-    if (errcode != Error::Code::Nil) {
-        return errcode;
+    if (!err.nil()) {
+        return err;
     }
     return this->connection->sendMessage(message);
 }
 
-Error::Code Connector::doSendMessageRetry(const std::string& recvName, const Array<uint8_t>& content, bool isGroup, bool isEncrypted, int32_t retry) {
+Error Connector::doSendMessageRetry(const std::string& recvName, const Array<uint8_t>& content, bool isGroup, bool isEncrypted, int32_t retry) {
     std::unique_ptr<ItemQueue> item{ new ItemQueue{} };
     item->content = content;
     item->msgID = this->counter->nextWriteIndex();
@@ -364,5 +337,5 @@ Error::Code Connector::doSendMessageRetry(const std::string& recvName, const Arr
     item->numberRetry = retry + 1;
     item->timestamp = 0;
     this->queueMessages->pushMessage(std::move(item));
-    return Error::Code::Nil;
+    return Error{};
 }

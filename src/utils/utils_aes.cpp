@@ -5,13 +5,13 @@ extern "C" {
 #include <esp_system.h>
 #include "message/define.h"
 #include "utils/utils_aes.h"
-#include "error/external.h"
-#include "error/package/utils_err.h"
+#include "utils/utils_define.h"
+#include "error/thirdparty.h"
 
-std::tuple<Error::Code, Array<uint8_t>, Array<uint8_t>, Array<uint8_t>> UtilsAES::encrypt(const Array<uint8_t>& key, const Array<uint8_t>& input, const Array<uint8_t>& aad) {
+std::tuple<Error, Array<uint8_t>, Array<uint8_t>, Array<uint8_t>> UtilsAES::encrypt(const Array<uint8_t>& key, const Array<uint8_t>& input, const Array<uint8_t>& aad) {
     if (key.length() != LENGTH_KEY) {
         return std::make_tuple(
-            Error::buildCode(UtilsErr::ID, UtilsErr::Func::AES_Encrypt, UtilsErr::Reason::InvalidKeyLength),
+            Error{ GET_FUNC_NAME(), "Length of key must be 32 "},
             Array<uint8_t>{},
             Array<uint8_t>{},
             Array<uint8_t>{}
@@ -55,7 +55,7 @@ std::tuple<Error::Code, Array<uint8_t>, Array<uint8_t>, Array<uint8_t>> UtilsAES
 
     mbedtls_gcm_free(&ctx);
     return std::make_tuple(
-        Error::Code::Nil,
+        Error{},
         std::move(iv),
         std::move(tag),
         std::move(output)
@@ -64,29 +64,24 @@ std::tuple<Error::Code, Array<uint8_t>, Array<uint8_t>, Array<uint8_t>> UtilsAES
 handleError:
     mbedtls_gcm_free(&ctx);
     return std::make_tuple(
-        Error::buildCode(
-            UtilsErr::ID, 
-            UtilsErr::Func::AES_Encrypt, 
-            errcode, 
-            External::ID::MbedTLS
-        ),
+        Error{ GET_FUNC_NAME(), Thirdparty::getMbedtlsError(errcode) },
         Array<uint8_t>{},
         Array<uint8_t>{},
         Array<uint8_t>{}
     );
 }
 
-std::tuple<Error::Code, Array<uint8_t>> UtilsAES::decrypt(const Array<uint8_t>& key, const Array<uint8_t>& input, const Array<uint8_t>& aad, const Array<uint8_t>& iv, const Array<uint8_t>& tag) {
+std::tuple<Error, Array<uint8_t>> UtilsAES::decrypt(const Array<uint8_t>& key, const Array<uint8_t>& input, const Array<uint8_t>& aad, const Array<uint8_t>& iv, const Array<uint8_t>& tag) {
     if (iv.length() != LENGTH_IV || tag.length() != LENGTH_AUTHEN_TAG) {
         return std::make_tuple(
-            Error::buildCode(UtilsErr::ID, UtilsErr::Func::AES_Decrypt, UtilsErr::Reason::AES_InvalidInput),
+            Error{ GET_FUNC_NAME(), "Length of iv or tag is not default value in 'message/define.h'" },
             Array<uint8_t>{}
         );
     }
     
     if (key.length() != LENGTH_KEY) {
         return std::make_tuple(
-            Error::buildCode(UtilsErr::ID, UtilsErr::Func::AES_Decrypt, UtilsErr::Reason::InvalidKeyLength),
+            Error{ GET_FUNC_NAME(), "Length of key must be 32" },
             Array<uint8_t>{}
         );
     }
@@ -118,17 +113,12 @@ std::tuple<Error::Code, Array<uint8_t>> UtilsAES::decrypt(const Array<uint8_t>& 
     
     }
     mbedtls_gcm_free(&ctx);
-    return std::make_tuple(Error::Code::Nil, output);
+    return std::make_tuple(Error{}, output);
 
 handleError:
     mbedtls_gcm_free(&ctx);
     return std::make_tuple(
-        Error::buildCode(
-            UtilsErr::ID, 
-            UtilsErr::Func::AES_Decrypt, 
-            errcode, 
-            External::ID::MbedTLS
-        ),
+        Error{ GET_FUNC_NAME(), Thirdparty::getMbedtlsError(errcode) },
         Array<uint8_t>{}
     );
 }

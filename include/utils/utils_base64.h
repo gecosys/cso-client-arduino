@@ -2,7 +2,7 @@
 #define UTILS_BASE64_H
 
 #include <string>
-#include "entity/array.h"
+#include "entity/array.hpp"
 
 class UtilsBase64 {
 public:

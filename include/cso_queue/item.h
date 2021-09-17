@@ -3,7 +3,7 @@
 
 #include <string>
 #include "error/error.h"
-#include "entity/array.h"
+#include "entity/array.hpp"
 
 struct ItemQueue {
     uint64_t msgID;

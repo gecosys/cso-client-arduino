@@ -2,7 +2,7 @@
 #include "error/error.h"
 #include "message/cipher.h"
 #include "message/define.h"
-#include "error/package/message_err.h"
+#include "utils/utils_define.h"
 
 #define MAX_CONNECTION_NAME_LENGTH 36
 
@@ -82,40 +82,28 @@ void Cipher::setIsEncrypted(bool isEncrypted) noexcept {
     this->isEncrypted = isEncrypted;
 }
 
-Error::Code Cipher::setIV(const Array<uint8_t>& iv) noexcept {
+Error Cipher::setIV(const Array<uint8_t>& iv) noexcept {
     if (iv.length() == LENGTH_IV) {
         this->iv = iv;
-        return Error::Code::Nil;
+        return Error{};
     }
-    return Error::buildCode(
-        MessageErr::ID,
-        MessageErr::Func::Cipher_SetIV,
-        MessageErr::Reason::Cipher_InvalidIVLen
-    );
+    return Error{ GET_FUNC_NAME(), "Length of 'iv' must be 'LENGTH_IV' be defined in 'message/define.h'" };
 }
 
-Error::Code Cipher::setAuthenTag(const Array<uint8_t>& authenTag) noexcept {
+Error Cipher::setAuthenTag(const Array<uint8_t>& authenTag) noexcept {
     if (authenTag.length() == LENGTH_AUTHEN_TAG) {
         this->authenTag = authenTag;
-        return Error::Code::Nil;
+        return Error{};
     }
-    return Error::buildCode(
-        MessageErr::ID,
-        MessageErr::Func::Cipher_SetAuthenTag,
-        MessageErr::Reason::Cipher_InvalidAuthenTagLen
-    );
+    return Error{ GET_FUNC_NAME(), "Length of 'authenTag' must be 'LENGTH_AUTHEN_TAG' be defined in 'message/define.h'" };
 }
 
-Error::Code Cipher::setSign(const Array<uint8_t>& sign) noexcept {
+Error Cipher::setSign(const Array<uint8_t>& sign) noexcept {
     if (sign.length() == LENGTH_SIGN) {
         this->sign = sign;
-        return Error::Code::Nil;
+        return Error{};
     }
-    return Error::buildCode(
-        MessageErr::ID,
-        MessageErr::Func::Cipher_SetSign,
-        MessageErr::Reason::Cipher_InvalidSignLen
-    );
+    return Error{ GET_FUNC_NAME(), "Length of 'sign' must be 'LENGTH_SIGN' be defined in 'message/define.h'" };
 }
 
 void Cipher::setName(const std::string& name) {
@@ -182,7 +170,7 @@ const Array<uint8_t>& Cipher::getData() const noexcept {
     return this->data;
 }
 
-std::tuple<Error::Code, Array<uint8_t>> Cipher::intoBytes() {
+std::tuple<Error, Array<uint8_t>> Cipher::intoBytes() {
     if (this->isEncrypted) {
         // Build cipher bytes
         Cipher::buildBytes(
@@ -217,7 +205,7 @@ std::tuple<Error::Code, Array<uint8_t>> Cipher::intoBytes() {
     );
 }
 
-std::tuple<Error::Code, Array<uint8_t>> Cipher::getRawBytes() {
+std::tuple<Error, Array<uint8_t>> Cipher::getRawBytes() {
     return Cipher::buildRawBytes(
         this->msgID,
         this->msgTag,
@@ -231,7 +219,7 @@ std::tuple<Error::Code, Array<uint8_t>> Cipher::getRawBytes() {
     );
 }
 
-std::tuple<Error::Code, Array<uint8_t>> Cipher::getAad() {
+std::tuple<Error, Array<uint8_t>> Cipher::getAad() {
     return Cipher::buildAad(
         this->msgID,
         this->msgTag,
@@ -254,18 +242,11 @@ std::tuple<Error::Code, Array<uint8_t>> Cipher::getAad() {
 // Sign: if encrypted is false then 32 bytes (HMAC-SHA256), otherwise 0 byte
 // Name: nName bytes
 // Data: remaining bytes
-std::tuple<Error::Code, std::unique_ptr<Cipher>> Cipher::parseBytes(const  Array<uint8_t>& buffer) {
+std::tuple<Error, std::unique_ptr<Cipher>> Cipher::parseBytes(const  Array<uint8_t>& buffer) {
     uint8_t fixedLen = 10;
     uint8_t posAuthenTag = 10;
     if (buffer.length() < fixedLen) {
-        return std::make_tuple(
-            Error::buildCode(
-                MessageErr::ID,
-                MessageErr::Func::Cipher_ParseBytes,
-                MessageErr::Reason::Cipher_InvalidBufferSize
-            ),
-            nullptr
-        );
+        return std::make_tuple(Error{ GET_FUNC_NAME(), "Invalid buffer length" }, nullptr);
     }
 
     uint8_t flag = buffer[8];
@@ -285,14 +266,7 @@ std::tuple<Error::Code, std::unique_ptr<Cipher>> Cipher::parseBytes(const  Array
         fixedLen += 8;
         posAuthenTag += 8;
         if (buffer.length() < fixedLen) {
-            return std::make_tuple(
-                Error::buildCode(
-                    MessageErr::ID,
-                    MessageErr::Func::Cipher_ParseBytes,
-                    MessageErr::Reason::Cipher_InvalidBufferSize
-                ),
-                nullptr
-            );
+            return std::make_tuple(Error{ GET_FUNC_NAME(), "Invalid buffer length" }, nullptr);
         }
         msgTag = ((uint64_t)buffer[17] << 56U) |
                  ((uint64_t)buffer[16] << 48U) |
@@ -308,24 +282,10 @@ std::tuple<Error::Code, std::unique_ptr<Cipher>> Cipher::parseBytes(const  Array
         fixedLen += LENGTH_AUTHEN_TAG + LENGTH_IV;
     }
     if (lenName == 0 || lenName > MAX_CONNECTION_NAME_LENGTH) {
-        return std::make_tuple(
-            Error::buildCode(
-                MessageErr::ID,
-                MessageErr::Func::Cipher_ParseBytes,
-                MessageErr::Reason::Cipher_InvalidNameLen
-            ),
-            nullptr
-        );
+        return std::make_tuple(Error{ GET_FUNC_NAME(), "Length of name doesn't be over 36" }, nullptr);
     }
     if (buffer.length() < (size_t)fixedLen + (size_t)lenName) {
-        return std::make_tuple(
-            Error::buildCode(
-                MessageErr::ID,
-                MessageErr::Func::Cipher_ParseBytes,
-                MessageErr::Reason::Cipher_InvalidBufferSize
-            ),
-            nullptr
-        );
+        return std::make_tuple(Error{ GET_FUNC_NAME(), "Invalid buffer length" }, nullptr);
     }
 
     std::unique_ptr<Cipher> cipher{ new Cipher() };
@@ -347,14 +307,7 @@ std::tuple<Error::Code, std::unique_ptr<Cipher>> Cipher::parseBytes(const  Array
         uint8_t posSign = fixedLen;
         fixedLen += LENGTH_SIGN;
         if (buffer.length() < (size_t)fixedLen + (size_t)lenName) {
-            return std::make_tuple(
-                Error::buildCode(
-                    MessageErr::ID,
-                    MessageErr::Func::Cipher_ParseBytes,
-                    MessageErr::Reason::Cipher_InvalidBufferSize
-                ),
-                nullptr
-            );
+            return std::make_tuple(Error{ GET_FUNC_NAME(), "Invalid buffer length" }, nullptr);
         }
         memcpy(cipher->sign.get(), buffer.get() + posSign, LENGTH_SIGN);
     }
@@ -370,20 +323,13 @@ std::tuple<Error::Code, std::unique_ptr<Cipher>> Cipher::parseBytes(const  Array
         memcpy(cipher->data.get(), buffer.get() + posData, sizeData);
     }
 
-    return std::make_tuple(Error::Code::Nil, std::move(cipher));
+    return std::make_tuple(Error{}, std::move(cipher));
 }
 
-std::tuple<Error::Code, Array<uint8_t>> Cipher::buildRawBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const std::string& name, const Array<uint8_t>& data) {
+std::tuple<Error, Array<uint8_t>> Cipher::buildRawBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const std::string& name, const Array<uint8_t>& data) {
     uint8_t lenName = name.length();
     if (lenName == 0 || lenName > MAX_CONNECTION_NAME_LENGTH) {
-        return std::make_tuple(
-            Error::buildCode(
-                MessageErr::ID,
-                MessageErr::Func::Cipher_BuildRawBytes,
-                MessageErr::Reason::Cipher_InvalidNameLen
-            ),
-            Array<uint8_t>{}
-        );
+        return std::make_tuple(Error{ GET_FUNC_NAME(), "Length of name doesn't be over 36" }, Array<uint8_t>{});
     }
 
     uint8_t bEncrypted = isEncrypted ? 1 : 0;
@@ -423,10 +369,10 @@ std::tuple<Error::Code, Array<uint8_t>> Cipher::buildRawBytes(uint64_t msgID, ui
         memcpy(buffer.get() + fixedLen + lenName, data.get(), data.length());
     }
 
-    return std::make_tuple(Error::Code::Nil, std::move(buffer));
+    return std::make_tuple(Error{}, std::move(buffer));
 }
 
-std::tuple<Error::Code, Array<uint8_t>> Cipher::buildAad(
+std::tuple<Error, Array<uint8_t>> Cipher::buildAad(
         uint64_t msgID,
         uint64_t msgTag,
         MessageType msgType,
@@ -438,14 +384,7 @@ std::tuple<Error::Code, Array<uint8_t>> Cipher::buildAad(
     uint8_t lenName = name.length();
 
     if (lenName == 0 || lenName > MAX_CONNECTION_NAME_LENGTH) {
-        return std::make_tuple(
-            Error::buildCode(
-                MessageErr::ID,
-                MessageErr::Func::Cipher_BuildAad,
-                MessageErr::Reason::Cipher_InvalidNameLen
-            ),
-            Array<uint8_t>{}
-        );
+        return std::make_tuple(Error{ GET_FUNC_NAME(), "Length of name doesn't be over 36" }, Array<uint8_t>{});
     }
 
     uint8_t bEncrypted = isEncrypted ? 1 : 0;
@@ -482,24 +421,24 @@ std::tuple<Error::Code, Array<uint8_t>> Cipher::buildAad(
     }
     memcpy(buffer.get() + fixedLen, name.c_str(), lenName);
 
-    return std::make_tuple(Error::Code::Nil, std::move(buffer));
+    return std::make_tuple(Error{}, std::move(buffer));
 }
 
-std::tuple<Error::Code, Array<uint8_t>> Cipher::buildCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const std::string& name, const Array<uint8_t>& iv, const Array<uint8_t>& authenTag, const Array<uint8_t>& data) {
-    int32_t errcode;
+std::tuple<Error, Array<uint8_t>> Cipher::buildCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const std::string& name, const Array<uint8_t>& iv, const Array<uint8_t>& authenTag, const Array<uint8_t>& data) {
+    std::string errContent;
 
     if (iv.length() != LENGTH_IV) {
-        errcode = MessageErr::Reason::Cipher_InvalidIVLen;
+        errContent = "Length of 'iv' must be 'LENGTH_IV' be defined in 'message/define.h'";
         goto handleError;
     }
 
     if (authenTag.length() != LENGTH_AUTHEN_TAG) {
-        errcode = MessageErr::Reason::Cipher_InvalidAuthenTagLen;
+        errContent = "Length of 'authenTag' must be 'LENGTH_AUTHEN_TAG' be defined in 'message/define.h'";
         goto handleError;
     }
 
     if (name.length() == 0 || name.length() > MAX_CONNECTION_NAME_LENGTH) {
-        errcode = MessageErr::Reason::Cipher_InvalidNameLen;
+        errContent = "Length of name doesn't be over 36";
         goto handleError;
     }
 
@@ -519,26 +458,19 @@ std::tuple<Error::Code, Array<uint8_t>> Cipher::buildCipherBytes(uint64_t msgID,
     );
 
 handleError:
-    return std::make_tuple(
-        Error::buildCode(
-            MessageErr::ID,
-            MessageErr::Func::Cipher_BuildCipherBytes,
-            errcode
-        ),
-        Array<uint8_t>{}
-    );
+    return std::make_tuple(Error{ GET_FUNC_NAME(), std::move(errContent) }, Array<uint8_t>{});
 }
 
-std::tuple<Error::Code, Array<uint8_t>> Cipher::buildNoCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const std::string& name, const Array<uint8_t>& sign, const Array<uint8_t>& data) {
-    int32_t errcode;
+std::tuple<Error, Array<uint8_t>> Cipher::buildNoCipherBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isFirst, bool isLast, bool isRequest, const std::string& name, const Array<uint8_t>& sign, const Array<uint8_t>& data) {
+    std::string errContent;
 
     if (sign.length() != LENGTH_SIGN) {
-        errcode = MessageErr::Reason::Cipher_InvalidSignLen;
+        errContent = "Length of 'sign' must be 'LENGTH_SIGN' be defined in 'message/define.h'";
         goto handleError;
     }
 
     if (name.length() == 0 || name.length() > MAX_CONNECTION_NAME_LENGTH) {
-        errcode = MessageErr::Reason::Cipher_InvalidNameLen;
+        errContent = "Length of name doesn't be over 36";
         goto handleError;
     }
 
@@ -558,17 +490,10 @@ std::tuple<Error::Code, Array<uint8_t>> Cipher::buildNoCipherBytes(uint64_t msgI
     );
 
 handleError:
-    return std::make_tuple(
-        Error::buildCode(
-            MessageErr::ID,
-            MessageErr::Func::Cipher_BuildNoCipherBytes,
-            errcode
-        ),
-        Array<uint8_t>{}
-    );
+    return std::make_tuple(Error{ GET_FUNC_NAME(), std::move(errContent) }, Array<uint8_t>{});
 }
 
-std::tuple<Error::Code, Array<uint8_t>> Cipher::buildBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const std::string& name, const Array<uint8_t>& iv, const Array<uint8_t>& authenTag, const Array<uint8_t>& sign, const Array<uint8_t>& data) {
+std::tuple<Error, Array<uint8_t>> Cipher::buildBytes(uint64_t msgID, uint64_t msgTag, MessageType msgType, bool isEncrypted, bool isFirst, bool isLast, bool isRequest, const std::string& name, const Array<uint8_t>& iv, const Array<uint8_t>& authenTag, const Array<uint8_t>& sign, const Array<uint8_t>& data) {
     uint8_t lenName = name.length();
     uint8_t bEncrypted = isEncrypted ? 1 : 0;
     uint8_t bFirst = isFirst ? 1 : 0;
@@ -626,5 +551,5 @@ std::tuple<Error::Code, Array<uint8_t>> Cipher::buildBytes(uint64_t msgID, uint6
     if (data.length() > 0) {
         memcpy(buffer + posData, data.get(), data.length());
     }
-    return std::make_tuple(Error::Code::Nil, Array<uint8_t>{ buffer, lenBuffer });
+    return std::make_tuple(Error{}, Array<uint8_t>{ buffer, lenBuffer });
 }

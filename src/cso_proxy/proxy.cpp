@@ -9,8 +9,9 @@
 #include "utils/utils_aes.h"
 #include "utils/utils_base64.h"
 #include "utils/utils_string.h"
-#include "error/external.h"
-#include "error/package/proxy_err.h"
+#include "utils/utils_define.h"
+#include "utils/utils_string.h"
+#include "error/thirdparty.h"
 
 std::unique_ptr<IProxy> Proxy::build(std::unique_ptr<IConfig>&& config) {
     return std::unique_ptr<IProxy>(new Proxy(std::forward<std::unique_ptr<IConfig>>(config)));
@@ -19,7 +20,7 @@ std::unique_ptr<IProxy> Proxy::build(std::unique_ptr<IConfig>&& config) {
 Proxy::Proxy(std::unique_ptr<IConfig>&& config) noexcept 
     : config{ std::forward<std::unique_ptr<IConfig>>(config) } {}
 
-std::tuple<Error::Code, ServerKey> Proxy::exchangeKey() {
+std::tuple<Error, ServerKey> Proxy::exchangeKey() {
     // "obj" is a reference to "doc".
     // "deserializeJson" from HTTP response to "doc" copied strings, 
     // if put "doc" and "data" into block and extract neccessary fields into variables,
@@ -28,7 +29,7 @@ std::tuple<Error::Code, ServerKey> Proxy::exchangeKey() {
     // Keeping "doc" will waste a some bytes for unnecessary fields and JsonDocument's data structure
     DynamicJsonDocument doc(0);
     JsonObject obj_json;
-    Error::Code errcode;
+    Error err;
     {
         {
             // Build http request body
@@ -54,20 +55,13 @@ std::tuple<Error::Code, ServerKey> Proxy::exchangeKey() {
 
             // Send request and receive response
             std::string resp;
-            std::tie(errcode, resp) = post(url, httpBody);
-            if (errcode != Error::Code::Nil) {
-                return std::make_tuple(errcode, ServerKey{});
+            std::tie(err, resp) = post(url, httpBody);
+            if (!err.nil()) {
+                return std::make_tuple(std::move(err), ServerKey{});
             }
 
             if (resp.empty()) {
-                return std::make_tuple(
-                    Error::buildCode(
-                        ProxyErr::ID,
-                        ProxyErr::Func::Proxy_ExchangeKey,
-                        ProxyErr::Reason::Response_Empty
-                    ),
-                    ServerKey{}
-                );
+                return std::make_tuple(Error{ GET_FUNC_NAME(), "[HTTP] Response is empty" }, ServerKey{});
             }
             
             // JSON string has 7 keys <=> 7 JSON_OBJECT
@@ -75,12 +69,7 @@ std::tuple<Error::Code, ServerKey> Proxy::exchangeKey() {
             auto jsonError = deserializeJson(doc, resp);
             if (jsonError) {
                 return std::make_tuple(
-                    Error::buildCode(
-                        ProxyErr::ID,
-                        ProxyErr::Func::Proxy_ExchangeKey,
-                        jsonError.code(),
-                        External::ID::ArduinoJSON
-                    ), 
+                    Error{ GET_FUNC_NAME(), Thirdparty::getAruduinojsonError(jsonError.code()) }, 
                     ServerKey{}
                 );
             }
@@ -90,12 +79,7 @@ std::tuple<Error::Code, ServerKey> Proxy::exchangeKey() {
         auto serverCode = (int32_t)doc["returncode"];
         if (serverCode != 1) {
             return std::make_tuple(
-                Error::buildCode(
-                    ProxyErr::ID, 
-                    ProxyErr::Func::Proxy_ExchangeKey,
-                    serverCode,
-                    External::ID::Server
-                ), 
+                Error{ GET_FUNC_NAME(), UtilsString::format("[Server] (%d)-%s", serverCode, (const char*)doc["data"]) }, 
                 ServerKey{}
             );
         }
@@ -106,60 +90,49 @@ std::tuple<Error::Code, ServerKey> Proxy::exchangeKey() {
     // so we need to cast type or extract explicit by "JsonObject[key].as<type>()".
     // However, "verifyDHKeys" function defined type params, extracting implicit will be called.
     bool valid;
-    std::tie(errcode, valid) = verifyDHKeys(
+    std::tie(err, valid) = verifyDHKeys(
         obj_json["g_key"], 
         obj_json["n_key"], 
         obj_json["pub_key"], 
         obj_json["sign"]
     );
-    if (errcode != Error::Nil) {
-        return std::make_tuple(errcode, ServerKey{});
+    if (!err.nil()) {
+        return std::make_tuple(std::move(err), ServerKey{});
     }
 
     if (!valid) {
-        return std::make_tuple(
-            Error::buildCode(
-                ProxyErr::ID, 
-                ProxyErr::Func::Proxy_ExchangeKey, 
-                ProxyErr::Reason::DHKeys_VerifyFailed
-            ),
-            ServerKey{}
-        );
+        return std::make_tuple(Error{ GET_FUNC_NAME(), "DH keys authentication failed" }, ServerKey{});
     }
 
     BigInt gKey;
     BigInt nKey;
     BigInt pubKey;
 
-    errcode = gKey.setString(obj_json["g_key"]);
-    if (errcode != Error::Nil) {
-        std::make_tuple(errcode, ServerKey{});
+    err = gKey.setString(obj_json["g_key"]);
+    if (!err.nil()) {
+        std::make_tuple(std::move(err), ServerKey{});
     }
 
-    errcode = nKey.setString(obj_json["n_key"]);
-    if (errcode != Error::Nil) {
-        std::make_tuple(errcode, ServerKey{});
+    err = nKey.setString(obj_json["n_key"]);
+    if (!err.nil()) {
+        std::make_tuple(std::move(err), ServerKey{});
     }
 
-    errcode = pubKey.setString(obj_json["pub_key"]);
-    if (errcode != Error::Nil) {
-        std::make_tuple(errcode, ServerKey{});
+    err = pubKey.setString(obj_json["pub_key"]);
+    if (!err.nil()) {
+        std::make_tuple(std::move(err), ServerKey{});
     }
-
-    return std::make_tuple(
-        Error::Code::Nil, 
-        ServerKey{ std::move(gKey), std::move(nKey), std::move(pubKey) }
-    );
+    return std::make_tuple(Error{}, ServerKey{ std::move(gKey), std::move(nKey), std::move(pubKey) });
 }
 
-std::tuple<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey& serverKey) {
+std::tuple<Error, ServerTicket> Proxy::registerConnection(const ServerKey& serverKey) {
     // Generate client private key
-    Error::Code errcode;
+    Error err;
     BigInt clientPrivKey;
 
-    std::tie(errcode, clientPrivKey) = UtilsDH::generatePrivateKey();
-    if (errcode != Error::Code::Nil) {
-        return std::make_tuple(errcode, ServerTicket{});
+    std::tie(err, clientPrivKey) = UtilsDH::generatePrivateKey();
+    if (!err.nil()) {
+        return std::make_tuple(std::move(err), ServerTicket{});
     }
 
     // Calculate client public key
@@ -167,14 +140,14 @@ std::tuple<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey&
     {
         BigInt pubKey;
 
-        std::tie(errcode, pubKey) = UtilsDH::calcPublicKey(serverKey.gKey, serverKey.nKey, clientPrivKey);
-        if (errcode != Error::Code::Nil) {
-            return std::make_tuple(errcode, ServerTicket{});
+        std::tie(err, pubKey) = UtilsDH::calcPublicKey(serverKey.gKey, serverKey.nKey, clientPrivKey);
+        if (!err.nil()) {
+            return std::make_tuple(std::move(err), ServerTicket{});
         }
 
-        std::tie(errcode, clientPubKey) = pubKey.toString();
-        if (errcode != Error::Code::Nil) {
-            return std::make_tuple(errcode, ServerTicket{});
+        std::tie(err, clientPubKey) = pubKey.toString();
+        if (!err.nil()) {
+            return std::make_tuple(std::move(err), ServerTicket{});
         }
     }
 
@@ -185,15 +158,15 @@ std::tuple<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey&
         // Calculate client secret key
         Array<uint8_t> secretKey;
 
-        std::tie(errcode, secretKey) = UtilsDH::calcSecretKey(serverKey.nKey, clientPrivKey, serverKey.pubKey);
-        if (errcode != Error::Code::Nil) {
-            return std::make_tuple(errcode, ServerTicket{});
+        std::tie(err, secretKey) = UtilsDH::calcSecretKey(serverKey.nKey, clientPrivKey, serverKey.pubKey);
+        if (!err.nil()) {
+            return std::make_tuple(std::move(err), ServerTicket{});
         }
 
         // Encrypt client token
-        std::tie(errcode, iv, tag, token) = buildEncyptToken(clientPubKey, secretKey);
-        if (errcode != Error::Code::Nil) {
-            return std::make_tuple(errcode, ServerTicket{});
+        std::tie(err, iv, tag, token) = buildEncyptToken(clientPubKey, secretKey);
+        if (!err.nil()) {
+            return std::make_tuple(std::move(err), ServerTicket{});
         }
     }
 
@@ -242,20 +215,13 @@ std::tuple<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey&
                 std::string resp;
 
                 // Send request and receive response
-                std::tie(errcode, resp) = post(url, httpBody);
-                if (errcode != Error::Code::Nil) {
-                    return std::make_tuple(errcode, ServerTicket{});
+                std::tie(err, resp) = post(url, httpBody);
+                if (!err.nil()) {
+                    return std::make_tuple(std::move(err), ServerTicket{});
                 }
 
                 if (resp.empty()) {
-                    return std::make_tuple(
-                        Error::buildCode(
-                            ProxyErr::ID,
-                            ProxyErr::Func::Proxy_RegisterConnection,
-                            ProxyErr::Reason::Response_Empty
-                        ), 
-                        ServerTicket{}
-                    );
+                    return std::make_tuple(Error{ GET_FUNC_NAME(), "[HTTP] Response is empty" }, ServerTicket{});
                 }
 
                 // Parse response
@@ -263,12 +229,7 @@ std::tuple<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey&
                 auto jsonError = deserializeJson(doc, resp);
                 if (jsonError) {
                     return std::make_tuple(
-                        Error::buildCode(
-                            ProxyErr::ID,
-                            ProxyErr::Func::Proxy_RegisterConnection, 
-                            jsonError.code(),
-                            External::ID::ArduinoJSON
-                        ), 
+                        Error{ GET_FUNC_NAME(), Thirdparty::getAruduinojsonError(jsonError.code()) }, 
                         ServerTicket{}
                     );
                 }
@@ -277,12 +238,7 @@ std::tuple<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey&
             auto serverCode = (int32_t)doc["returncode"];
             if (serverCode != 1) {
                 return std::make_tuple(
-                    Error::buildCode(
-                        ProxyErr::ID,
-                        ProxyErr::Func::Proxy_RegisterConnection, 
-                        serverCode,
-                        External::ID::Server
-                    ), 
+                    Error{ GET_FUNC_NAME(), UtilsString::format("[Server] (%d)-%s", serverCode, (const char*)doc["data"]) }, 
                     ServerTicket{}
                 );
             }
@@ -322,14 +278,7 @@ std::tuple<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey&
             }
 
             if (index == -1) {
-                return std::make_tuple(
-                    Error::buildCode(
-                        ProxyErr::ID,
-                        ProxyErr::Func::Proxy_RegisterConnection,
-                        ProxyErr::Reason::HubAddress_Invalid
-                    ),
-                    ServerTicket{}
-                );
+                return std::make_tuple(Error{ GET_FUNC_NAME(), "Hub address is invalid" }, ServerTicket{});
             }
 
             hubIP.assign(hubAddress, 0, index);
@@ -337,35 +286,35 @@ std::tuple<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey&
         }
 
         // Build server public key
-        errcode = serverPubKey.setString(strServerPubKey);
-        if (errcode != Error::Code::Nil) {
-            return std::make_tuple(errcode, ServerTicket{});
+        err = serverPubKey.setString(strServerPubKey);
+        if (!err.nil()) {
+            return std::make_tuple(std::move(err), ServerTicket{});
         }
     }
 
     // Build server secret key
     Array<uint8_t> serverSecretKey;
-    std::tie(errcode, serverSecretKey) = UtilsDH::calcSecretKey(serverKey.nKey, clientPrivKey, serverPubKey);
-    if (errcode != Error::Code::Nil) {
-        return std::make_tuple(errcode, ServerTicket{});
+    std::tie(err, serverSecretKey) = UtilsDH::calcSecretKey(serverKey.nKey, clientPrivKey, serverPubKey);
+    if (!err.nil()) {
+        return std::make_tuple(std::move(err), ServerTicket{});
     }
 
     // Decrypt server token
-    std::tie(errcode, token) = UtilsAES::decrypt(serverSecretKey, ticketToken, aad, iv, tag);
-    if (errcode != Error::Code::Nil) {
-        return std::make_tuple(errcode, ServerTicket{});
+    std::tie(err, token) = UtilsAES::decrypt(serverSecretKey, ticketToken, aad, iv, tag);
+    if (!err.nil()) {
+        return std::make_tuple(std::move(err), ServerTicket{});
     }
 
     // Parse server ticket token to bytes
     Array<uint8_t> ticket;
-    std::tie(errcode, ticket) = Ticket::buildBytes(ticketID, token);
-    if (errcode != Error::Code::Nil) {
-        return std::make_tuple(errcode, ServerTicket{});
+    std::tie(err, ticket) = Ticket::buildBytes(ticketID, token);
+    if (!err.nil()) {
+        return std::make_tuple(std::move(err), ServerTicket{});
     }
 
     // Done
     return std::make_tuple(
-        Error::Code::Nil,
+        Error{},
         ServerTicket{
             std::move(hubIP),
             hubPort,
@@ -379,7 +328,7 @@ std::tuple<Error::Code, ServerTicket> Proxy::registerConnection(const ServerKey&
 //========
 // PRIVATE
 //========
-std::tuple<Error::Code, std::string> Proxy::post(const std::string& url, const Array<uint8_t>& body) {
+std::tuple<Error, std::string> Proxy::post(const std::string& url, const Array<uint8_t>& body) {
     // WiFiClientSecure secureClient;
     // secureClient.setTimeout(20000);
     // secureClient.setInsecure();
@@ -389,7 +338,7 @@ std::tuple<Error::Code, std::string> Proxy::post(const std::string& url, const A
     // if (!secureClient.connect("https://goldeneyetech.com.vn", 443)) {
     //     log_e("Send POST failed");
     //     vTaskDelay(1000);
-    //     return std::pair<Error::Code, std::string>(Error::NotConnectServer, "");
+    //     return std::pair<Error, std::string>(Error::NotConnectServer, "");
     // }
     // log_e("Send POST success");
     
@@ -397,38 +346,24 @@ std::tuple<Error::Code, std::string> Proxy::post(const std::string& url, const A
     http.setTimeout(20000); // 20s
     if (!http.begin(url.c_str())) {
         // secureClient.stop();
-        return std::make_tuple(
-            Error::buildCode(
-                ProxyErr::ID,
-                ProxyErr::Func::Proxy_Post,
-                ProxyErr::Reason::Http_Disconnected
-            ),
-            ""
-        );
+        return std::make_tuple(Error{ GET_FUNC_NAME(), "[HTTP] Connection is disconnected" }, "");
     }
 
     http.addHeader("Content-Type", "application/json");
     auto status = http.POST(body.get(), body.length());
     if (status != 200) {
         http.end();
-        return std::make_tuple(
-            Error::buildCode(
-                ProxyErr::ID,
-                ProxyErr::Func::Proxy_Post,
-                status,
-                External::ID::HTTP
-            ),
-            ""
-        );
+        Serial.printf("%s-%d\n", url.c_str(), status);
+        return std::make_tuple(Error{ GET_FUNC_NAME(), Thirdparty::getHttpError(status) }, "");
     }
 
     std::string resp(http.getString().c_str());
     http.end();
     // secureClient.stop();
-    return std::make_tuple(Error::Code::Nil, std::move(resp));
+    return std::make_tuple(Error{}, std::move(resp));
 }
 
-std::tuple<Error::Code, bool> Proxy::verifyDHKeys(const std::string& gKey, const std::string& nKey, const std::string& pubKey, const std::string& encodeSign) {
+std::tuple<Error, bool> Proxy::verifyDHKeys(const std::string& gKey, const std::string& nKey, const std::string& pubKey, const std::string& encodeSign) {
     // Build data
     Array<uint8_t> data;
     {
@@ -450,7 +385,7 @@ std::tuple<Error::Code, bool> Proxy::verifyDHKeys(const std::string& gKey, const
     );
 }
 
-std::tuple<Error::Code, Array<uint8_t>, Array<uint8_t>, Array<uint8_t>> Proxy::buildEncyptToken(const std::string& clientPubKey, const Array<uint8_t>& secretKey) {
+std::tuple<Error, Array<uint8_t>, Array<uint8_t>, Array<uint8_t>> Proxy::buildEncyptToken(const std::string& clientPubKey, const Array<uint8_t>& secretKey) {
     // Build client aad
     Array<uint8_t> aad;
     {

@@ -1,5 +1,5 @@
-#ifndef ENTITY_ARRAY_H
-#define ENTITY_ARRAY_H
+#ifndef ENTITY_ARRAY_HPP
+#define ENTITY_ARRAY_HPP
 
 #include <tuple>
 #include <cstring>
