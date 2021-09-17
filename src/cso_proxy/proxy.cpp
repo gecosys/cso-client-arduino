@@ -77,7 +77,7 @@ std::tuple<Error, ServerKey> Proxy::exchangeKey() {
         auto serverCode = (int32_t)doc["returncode"];
         if (serverCode != 1) {
             return std::make_tuple(
-                Error{ GET_FUNC_NAME(), format("[Server] (%d)-%s", serverCode, (const char*)doc["data"]) }, 
+                Error{ GET_FUNC_NAME(), format("[Server] (%d)%s", serverCode, (const char*)doc["data"]) }, 
                 ServerKey{}
             );
         }
@@ -236,7 +236,7 @@ std::tuple<Error, ServerTicket> Proxy::registerConnection(const ServerKey& serve
             auto serverCode = (int32_t)doc["returncode"];
             if (serverCode != 1) {
                 return std::make_tuple(
-                    Error{ GET_FUNC_NAME(), format("[Server] (%d)-%s", serverCode, (const char*)doc["data"]) }, 
+                    Error{ GET_FUNC_NAME(), format("[Server] (%d)%s", serverCode, (const char*)doc["data"]) }, 
                     ServerTicket{}
                 );
             }
