@@ -5,7 +5,7 @@ extern "C" {
 }
 #include "message/define.h"
 #include "utils/utils_rsa.h"
-#include "utils/utils_define.h"
+#include "utils/utils_general.hpp"
 #include "error/thirdparty.h"
 
 

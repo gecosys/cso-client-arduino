@@ -2,22 +2,22 @@
 #include <ArduinoJson.h>
 #include <mbedtls/error.h>
 #include "error/thirdparty.h"
-#include "utils/utils_string.h"
+#include "utils/utils_general.hpp"
 
 std::string Thirdparty::getMbedtlsError(int32_t code) {
     char reason[256];
     mbedtls_strerror(code, reason, 256);
-    return UtilsString::format("[MbedTLS]: %s", reason);
+    return format("[MbedTLS]: %s", reason);
 }
 
 std::string Thirdparty::getAruduinojsonError(int32_t code) {
     DeserializationError reason((DeserializationError::Code)code);
-    return UtilsString::format("[ArduinoJSON]: %s", reason.c_str());
+    return format("[ArduinoJSON]: %s", reason.c_str());
 }
 
 std::string Thirdparty::getHttpError(int32_t code) {
     if (code >= 100) {
-        return UtilsString::format("[HTTP]: Satus %d", code);
+        return format("[HTTP]: Satus %d", code);
     }
-    return UtilsString::format("[HTTP]: %s", HTTPClient::errorToString(code).c_str());
+    return format("[HTTP]: %s", HTTPClient::errorToString(code).c_str());
 }

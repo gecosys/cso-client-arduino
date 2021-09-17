@@ -8,9 +8,7 @@
 #include "utils/utils_rsa.h"
 #include "utils/utils_aes.h"
 #include "utils/utils_base64.h"
-#include "utils/utils_string.h"
-#include "utils/utils_define.h"
-#include "utils/utils_string.h"
+#include "utils/utils_general.hpp"
 #include "error/thirdparty.h"
 
 std::unique_ptr<IProxy> Proxy::build(std::unique_ptr<IConfig>&& config) {
@@ -51,7 +49,7 @@ std::tuple<Error, ServerKey> Proxy::exchangeKey() {
             // std::unique_ptr<char> url{ new char[this->config->getCSOAddress().length() + 14] };
             // sprintf(url.get(), "%s/exchange-key", this->config->getCSOAddress().c_str());
             // Build URL
-            std::string url{ UtilsString::format("%s/exchange-key", this->config->getCSOAddress().c_str()) };
+            std::string url{ format("%s/exchange-key", this->config->getCSOAddress().c_str()) };
 
             // Send request and receive response
             std::string resp;
@@ -79,7 +77,7 @@ std::tuple<Error, ServerKey> Proxy::exchangeKey() {
         auto serverCode = (int32_t)doc["returncode"];
         if (serverCode != 1) {
             return std::make_tuple(
-                Error{ GET_FUNC_NAME(), UtilsString::format("[Server] (%d)-%s", serverCode, (const char*)doc["data"]) }, 
+                Error{ GET_FUNC_NAME(), format("[Server] (%d)-%s", serverCode, (const char*)doc["data"]) }, 
                 ServerKey{}
             );
         }
@@ -211,7 +209,7 @@ std::tuple<Error, ServerTicket> Proxy::registerConnection(const ServerKey& serve
                 }
 
                 // Build URL
-                std::string url{ UtilsString::format("%s/register-connection", this->config->getCSOAddress().c_str()) };
+                std::string url{ format("%s/register-connection", this->config->getCSOAddress().c_str()) };
                 std::string resp;
 
                 // Send request and receive response
@@ -238,7 +236,7 @@ std::tuple<Error, ServerTicket> Proxy::registerConnection(const ServerKey& serve
             auto serverCode = (int32_t)doc["returncode"];
             if (serverCode != 1) {
                 return std::make_tuple(
-                    Error{ GET_FUNC_NAME(), UtilsString::format("[Server] (%d)-%s", serverCode, (const char*)doc["data"]) }, 
+                    Error{ GET_FUNC_NAME(), format("[Server] (%d)-%s", serverCode, (const char*)doc["data"]) }, 
                     ServerTicket{}
                 );
             }
@@ -353,7 +351,6 @@ std::tuple<Error, std::string> Proxy::post(const std::string& url, const Array<u
     auto status = http.POST(body.get(), body.length());
     if (status != 200) {
         http.end();
-        Serial.printf("%s-%d\n", url.c_str(), status);
         return std::make_tuple(Error{ GET_FUNC_NAME(), Thirdparty::getHttpError(status) }, "");
     }
 

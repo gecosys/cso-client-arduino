@@ -1,7 +1,7 @@
 #include <cstring>
 #include "message/ticket.h"
 #include "message/define.h"
-#include "utils/utils_define.h"
+#include "utils/utils_general.hpp"
 
 Ticket::Ticket() noexcept 
     : id{},

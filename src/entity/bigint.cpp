@@ -1,8 +1,8 @@
 #include <memory>
 #include <cstring>
 #include "entity/bigint.h"
-#include "utils/utils_define.h"
 #include "error/thirdparty.h"
+#include "utils/utils_general.hpp"
 
 BigInt::BigInt() noexcept {
     mbedtls_mpi_init(&this->core);

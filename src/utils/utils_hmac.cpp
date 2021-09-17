@@ -6,7 +6,7 @@ extern "C" {
 #include <esp32-hal-log.h>
 #include "message/define.h"
 #include "utils/utils_hmac.h"
-#include "utils/utils_define.h"
+#include "utils/utils_general.hpp"
 #include "error/thirdparty.h"
 
 std::tuple<Error, Array<uint8_t>> UtilsHMAC::calcHMAC(const Array<uint8_t>& key, const Array<uint8_t>& data) {

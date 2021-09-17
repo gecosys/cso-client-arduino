@@ -4,9 +4,9 @@ extern "C" {
 }
 #include <esp_system.h>
 #include "message/define.h"
-#include "utils/utils_aes.h"
-#include "utils/utils_define.h"
 #include "error/thirdparty.h"
+#include "utils/utils_aes.h"
+#include "utils/utils_general.hpp"
 
 std::tuple<Error, Array<uint8_t>, Array<uint8_t>, Array<uint8_t>> UtilsAES::encrypt(const Array<uint8_t>& key, const Array<uint8_t>& input, const Array<uint8_t>& aad) {
     if (key.length() != LENGTH_KEY) {

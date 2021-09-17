@@ -2,7 +2,7 @@
 #include "cso_parser/parser.h"
 #include "utils/utils_aes.h"
 #include "utils/utils_hmac.h"
-#include "utils/utils_define.h"
+#include "utils/utils_general.hpp"
 
 std::unique_ptr<IParser> Parser::build() {
     return std::unique_ptr<IParser>{ new Parser{} };

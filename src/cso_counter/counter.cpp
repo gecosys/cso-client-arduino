@@ -1,4 +1,3 @@
-#include <new>
 #include "cso_counter/counter.h"
 
 #define NUMBER_BITS 32

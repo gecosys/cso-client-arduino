@@ -2,7 +2,7 @@
 #include "error/error.h"
 #include "message/cipher.h"
 #include "message/define.h"
-#include "utils/utils_define.h"
+#include "utils/utils_general.hpp"
 
 #define MAX_CONNECTION_NAME_LENGTH 36
 

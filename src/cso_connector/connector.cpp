@@ -7,7 +7,7 @@
 #include "cso_connector/connector.h"
 #include "cso_connection/connection.h"
 #include "message/readyticket.h"
-#include "utils/utils_define.h"
+#include "utils/utils_general.hpp"
 
 #define DELAY_TIME 3000
 #define TIMESTAMP_SECS() esp_timer_get_time() / 1000000ULL
